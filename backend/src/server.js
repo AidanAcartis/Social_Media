@@ -6,11 +6,22 @@ const path = require('path');
 const mysql = require('mysql2');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const http = require('http');
+const { Server } = require('socket.io');
 
 dotenv.config();
 
 const app = express();
+const server = http.createServer(app);
 const PORT = process.env.PORT || 5000;
+
+// Initialisation de Socket.IO
+const io = new Server(server, {
+  cors: {
+    origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+    credentials: true
+  }
+});
 
 // Middleware
 app.use(cors({
@@ -45,12 +56,169 @@ const promisePool = pool.promise();
   }
 })();
 
+// ========== SOCKET.IO ==========
+io.on('connection', (socket) => {
+  console.log('🔌 Nouvel utilisateur connecté:', socket.id);
+
+  // Utilisateur rejoint sa room personnelle
+  socket.on('join', (userId) => {
+    socket.join(`user_${userId}`);
+    console.log(`📱 Utilisateur ${userId} a rejoint sa room`);
+  });
+
+  // ========== FORUM PUBLIC ==========
+  socket.on('getForumMessages', async () => {
+    try {
+      const [messages] = await promisePool.query(
+        `SELECT fm.*, u.username 
+         FROM forum_messages fm
+         JOIN users u ON fm.sender_id = u.id
+         ORDER BY fm.created_at ASC
+         LIMIT 100`
+      );
+      socket.emit('forumMessages', messages);
+    } catch (error) {
+      console.error('Erreur getForumMessages:', error);
+      socket.emit('forumMessages', []);
+    }
+  });
+
+  socket.on('sendForumMessage', async (data) => {
+    const { senderId, username, content } = data;
+    
+    try {
+      const [result] = await promisePool.query(
+        'INSERT INTO forum_messages (sender_id, content) VALUES (?, ?)',
+        [senderId, content]
+      );
+      
+      const newMessage = {
+        id: result.insertId,
+        sender_id: senderId,
+        content: content,
+        username: username,
+        created_at: new Date()
+      };
+      
+      io.emit('newForumMessage', newMessage);
+    } catch (error) {
+      console.error('Erreur sendForumMessage:', error);
+    }
+  });
+
+  // ========== MESSAGES PRIVÉS ==========
+  socket.on('getMessages', async (data) => {
+    const { senderId, receiverId } = data;
+    
+    try {
+      const [messages] = await promisePool.query(
+        `SELECT pm.*, 
+          u1.username as sender_username,
+          u2.username as receiver_username
+         FROM private_messages pm
+         JOIN users u1 ON pm.sender_id = u1.id
+         JOIN users u2 ON pm.receiver_id = u2.id
+         WHERE (pm.sender_id = ? AND pm.receiver_id = ?)
+            OR (pm.sender_id = ? AND pm.receiver_id = ?)
+         ORDER BY pm.created_at ASC`,
+        [senderId, receiverId, receiverId, senderId]
+      );
+      
+      socket.emit('receiveMessages', messages);
+      
+      // Marquer les messages comme lus
+      await promisePool.query(
+        'UPDATE private_messages SET is_read = 1 WHERE sender_id = ? AND receiver_id = ? AND is_read = 0',
+        [receiverId, senderId]
+      );
+      
+      // Mettre à jour le compteur de messages non lus
+      const [unreadCount] = await promisePool.query(
+        'SELECT COUNT(*) as count FROM private_messages WHERE receiver_id = ? AND is_read = 0',
+        [senderId]
+      );
+      
+      io.to(`user_${senderId}`).emit('unreadMessagesCount', { unreadCount: unreadCount[0].count });
+    } catch (error) {
+      console.error('Erreur getMessages:', error);
+    }
+  });
+
+  socket.on('sendPrivateMessage', async (data) => {
+    const { senderId, receiverId, content } = data;
+    
+    try {
+      const [result] = await promisePool.query(
+        'INSERT INTO private_messages (sender_id, receiver_id, content) VALUES (?, ?, ?)',
+        [senderId, receiverId, content]
+      );
+      
+      const [newMessage] = await promisePool.query(
+        `SELECT pm.*, 
+          u1.username as sender_username,
+          u2.username as receiver_username
+         FROM private_messages pm
+         JOIN users u1 ON pm.sender_id = u1.id
+         JOIN users u2 ON pm.receiver_id = u2.id
+         WHERE pm.id = ?`,
+        [result.insertId]
+      );
+      
+      // Envoyer au destinataire
+      io.to(`user_${receiverId}`).emit('newPrivateMessage', newMessage[0]);
+      // Envoyer à l'expéditeur
+      socket.emit('newPrivateMessage', newMessage[0]);
+      
+      // Mettre à jour le compteur de messages non lus pour le destinataire
+      const [unreadCount] = await promisePool.query(
+        'SELECT COUNT(*) as count FROM private_messages WHERE receiver_id = ? AND is_read = 0',
+        [receiverId]
+      );
+      
+      io.to(`user_${receiverId}`).emit('unreadMessagesCount', { unreadCount: unreadCount[0].count });
+    } catch (error) {
+      console.error('Erreur sendPrivateMessage:', error);
+    }
+  });
+
+  // ========== NOTIFICATIONS ==========
+  socket.on('getNotifications', async (userId) => {
+    try {
+      const [notifications] = await promisePool.query(
+        'SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND is_read = 0',
+        [userId]
+      );
+      socket.emit('notificationUpdate', { unreadCount: notifications[0].count });
+    } catch (error) {
+      console.error('Erreur getNotifications:', error);
+    }
+  });
+
+  socket.on('getUnreadMessages', async (userId) => {
+    try {
+      const [unreadCount] = await promisePool.query(
+        'SELECT COUNT(*) as count FROM private_messages WHERE receiver_id = ? AND is_read = 0',
+        [userId]
+      );
+      socket.emit('unreadMessagesCount', { unreadCount: unreadCount[0].count });
+    } catch (error) {
+      console.error('Erreur getUnreadMessages:', error);
+    }
+  });
+
+  socket.on('disconnect', () => {
+    console.log('🔌 Utilisateur déconnecté:', socket.id);
+  });
+});
+
+// ========== ROUTES API ==========
+
 // Route de test
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'Backend fonctionne!', timestamp: new Date() });
 });
 
-// ROUTE D'INSCRIPTION (AJOUTÉE)
+// ROUTE D'INSCRIPTION
 app.post('/api/auth/register', async (req, res) => {
   const { username, email, password } = req.body;
   
@@ -59,7 +227,6 @@ app.post('/api/auth/register', async (req, res) => {
   console.log('Email:', email);
   
   try {
-    // Vérifier si l'utilisateur existe déjà
     const [existing] = await promisePool.query(
       'SELECT id FROM users WHERE email = ? OR username = ?',
       [email, username]
@@ -70,11 +237,9 @@ app.post('/api/auth/register', async (req, res) => {
       return res.status(400).json({ message: 'Email ou nom d\'utilisateur déjà utilisé' });
     }
     
-    // Hasher le mot de passe
     const hashedPassword = await bcrypt.hash(password, 10);
     console.log('✅ Mot de passe hashé');
     
-    // Créer l'utilisateur
     const [result] = await promisePool.query(
       'INSERT INTO users (username, email, password) VALUES (?, ?, ?)',
       [username, email, hashedPassword]
@@ -82,14 +247,12 @@ app.post('/api/auth/register', async (req, res) => {
     
     console.log('✅ Utilisateur créé avec ID:', result.insertId);
     
-    // Créer le token JWT
     const token = jwt.sign(
       { id: result.insertId, username },
       process.env.JWT_SECRET || 'mon_secret_jwt',
       { expiresIn: '7d' }
     );
     
-    // Définir le cookie
     res.cookie('token', token, {
       httpOnly: true,
       secure: false,
@@ -107,7 +270,7 @@ app.post('/api/auth/register', async (req, res) => {
   }
 });
 
-// Route de connexion (améliorée)
+// ROUTE DE CONNEXION
 app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
   
@@ -160,18 +323,30 @@ app.post('/api/auth/login', async (req, res) => {
 
 // Route pour récupérer l'utilisateur courant
 app.get('/api/auth/me', (req, res) => {
-  res.json({ 
-    user: { 
-      id: 1, 
-      username: 'TestUser', 
-      email: 'test@example.com' 
-    } 
-  });
+  const token = req.cookies?.token;
+  
+  if (!token) {
+    return res.status(401).json({ message: 'Non authentifié' });
+  }
+  
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'mon_secret_jwt');
+    res.json({ user: decoded });
+  } catch (error) {
+    res.status(401).json({ message: 'Token invalide' });
+  }
+});
+
+// Route de déconnexion
+app.post('/api/auth/logout', (req, res) => {
+  res.clearCookie('token');
+  res.json({ message: 'Déconnexion réussie' });
 });
 
 // Démarrer le serveur
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`🚀 Serveur démarré sur http://localhost:${PORT}`);
   console.log(`📡 API disponible sur http://localhost:${PORT}/api/health`);
   console.log(`🔐 Inscription: POST http://localhost:${PORT}/api/auth/register`);
+  console.log(`🔌 WebSocket prêt sur le port ${PORT}`);
 });

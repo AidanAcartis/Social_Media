@@ -1,22 +1,25 @@
-import Header from '../components/layout/Header'
-import Footer from '../components/layout/Footer'
 import NavigationCard from '../components/ui/NavigationCard'
 
 export default function MainLayout({ children }) {
   return (
-    <div className="min-h-screen flex flex-col">
-      <Header />
-      <div className="grow">
-        <div className="md:flex mt-4 max-w-4xl mx-auto gap-6 mb-24 md:mb-0">
-          <div className="fixed w-full md:static bottom-0 md:w-3/12 -mb-5">
-            <NavigationCard />
-          </div>
-          <div className="mx-4 md:mx-0 md:w-9/12">
-            {children}
-          </div>
+    <div className="min-h-screen bg-linear-to-br from-gray-50 via-white to-gray-100">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
+        <div className="flex flex-col lg:flex-row gap-8">
+          {/* Sidebar moderne avec effet sticky */}
+          <aside className="lg:w-80 shrink-0">
+            <div className="lg:sticky lg:top-6 transition-all duration-300">
+              <NavigationCard />
+            </div>
+          </aside>
+
+          {/* Contenu principal avec animation d'entrée */}
+          <main className="flex-1 min-w-0">
+            <div className="animate-fade-in-up">
+              {children}
+            </div>
+          </main>
         </div>
       </div>
-      <Footer />
     </div>
   )
 }
