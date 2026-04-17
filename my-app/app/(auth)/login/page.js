@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { useAuth } from '../../context/AuthContext'  // Changé ici
+import { useAuth } from '../../context/AuthContext'
 
 export default function LoginPage() {
   const { login } = useAuth()

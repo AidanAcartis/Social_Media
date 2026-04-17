@@ -31,38 +31,49 @@ export function AuthProvider({ children }) {
   }
 
   const login = async (email, password) => {
-    const response = await fetch('http://localhost:5000/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ email, password })
-    })
-    
-    if (response.ok) {
-      const data = await response.json()
-      setUser(data.user)
-      router.push('/home')
-      return { success: true }
-    } else {
-      const error = await response.json()
-      return { success: false, error: error.message }
+    try {
+      const response = await fetch('http://localhost:5000/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ email, password })
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        setUser(data.user)
+        router.push('/home')
+        return { success: true }
+      } else {
+        const error = await response.json()
+        return { success: false, error: error.message }
+      }
+    } catch (error) {
+      return { success: false, error: 'Erreur de connexion' }
     }
   }
 
   const signup = async (username, email, password) => {
-    const response = await fetch('http://localhost:5000/api/auth/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ username, email, password })
-    })
-    
-    if (response.ok) {
-      router.push('/login')
-      return { success: true }
-    } else {
-      const error = await response.json()
-      return { success: false, error: error.message }
+    try {
+      const response = await fetch('http://localhost:5000/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ username, email, password })
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        // Auto-login après inscription
+        setUser(data.user)
+        router.push('/home')
+        return { success: true }
+      } else {
+        const error = await response.json()
+        return { success: false, error: error.message }
+      }
+    } catch (error) {
+      return { success: false, error: 'Erreur lors de l\'inscription' }
     }
   }
 

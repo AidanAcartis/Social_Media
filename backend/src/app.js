@@ -16,11 +16,17 @@ const notificationRoutes = require('./routes/notificationRoutes');
 
 const app = express();
 
-// Middleware
+// Middleware CORS amélioré
 app.use(cors({
   origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie']
 }));
+
+// Gérer explicitement les requêtes OPTIONS
+app.options('*', cors());
+
 app.use(express.json());
 app.use(cookieParser());
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
@@ -36,6 +42,11 @@ app.use('/api/notifications', notificationRoutes);
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date() });
+});
+
+// Gestion des erreurs 404
+app.use((req, res) => {
+  res.status(404).json({ message: 'Route non trouvée' });
 });
 
 module.exports = app;
