@@ -18,7 +18,6 @@ export default function MessagePage() {
   const [isConnected, setIsConnected] = useState(false)
   const messagesEndRef = useRef(null)
 
-  // Initialiser Socket.IO
   useEffect(() => {
     if (!user) return
 
@@ -36,9 +35,8 @@ export default function MessagePage() {
       if (selectedFriend && message.senderId === selectedFriend.id) {
         setMessages((prev) => [...prev, message])
       }
-      // Mettre à jour l'aperçu dans la liste des amis
-      setFriends(prev => prev.map(friend => 
-        friend.id === message.senderId 
+      setFriends(prev => prev.map(friend =>
+        friend.id === message.senderId
           ? { ...friend, lastMessage: message.content, lastMessageTime: message.createdAt }
           : friend
       ))
@@ -53,7 +51,6 @@ export default function MessagePage() {
     }
   }, [user])
 
-  // Charger la liste des amis
   useEffect(() => {
     fetchFriends()
   }, [user])
@@ -65,19 +62,15 @@ export default function MessagePage() {
       })
       if (response.ok) {
         const data = await response.json()
-        // Filtrer pour n'avoir que les utilisateurs suivis
         const followers = data.data?.filter(f => f.follower_id === user?.id) || []
         const friendIds = followers.map(f => f.followed_id)
-        
-        // Récupérer les infos des amis
+
         const friendsData = await Promise.all(
           friendIds.map(async (id) => {
             const userRes = await fetch(`http://localhost:5000/api/users/${id}`, {
               credentials: 'include'
             })
-            if (userRes.ok) {
-              return await userRes.json()
-            }
+            if (userRes.ok) return await userRes.json()
             return null
           })
         )
@@ -90,11 +83,8 @@ export default function MessagePage() {
     }
   }
 
-  // Charger les messages quand un ami est sélectionné
   useEffect(() => {
-    if (selectedFriend && user) {
-      fetchMessages()
-    }
+    if (selectedFriend && user) fetchMessages()
   }, [selectedFriend])
 
   const fetchMessages = async () => {
@@ -111,7 +101,6 @@ export default function MessagePage() {
     }
   }
 
-  // Auto-scroll
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
@@ -127,16 +116,13 @@ export default function MessagePage() {
       createdAt: new Date().toISOString()
     }
 
-    // Optimistic update
     setMessages((prev) => [...prev, messageData])
     setNewMessage('')
 
-    // Envoyer via WebSocket
     if (socket && isConnected) {
       socket.emit('sendPrivateMessage', messageData)
     }
 
-    // Sauvegarder dans la base de données
     try {
       await fetch('http://localhost:5000/api/messages', {
         method: 'POST',
@@ -150,21 +136,22 @@ export default function MessagePage() {
   }
 
   if (loading) {
-    return <div className="text-center py-10">Chargement...</div>
+    return <div className="text-center py-10 text-sm text-gray-400">Chargement...</div>
   }
 
   return (
     <div className="h-[calc(100vh-120px)]">
-      <Card noPadding className="h-full flex flex-col overflow-hidden">
+      <Card noPadding className="h-full flex flex-col overflow-hidden border border-gray-100 shadow-sm rounded-2xl">
         <div className="flex h-full">
+
           {/* Liste des conversations */}
-          <div className="w-80 border-r flex flex-col">
-            <div className="p-4 border-b">
-              <h2 className="font-bold text-lg">Messages</h2>
+          <div className="w-72 border-r border-gray-100 flex flex-col">
+            <div className="px-5 py-4 border-b border-gray-100">
+              <h2 className="text-sm font-semibold text-gray-800">Messages</h2>
             </div>
             <div className="flex-1 overflow-y-auto">
               {friends.length === 0 ? (
-                <div className="text-center text-gray-500 py-10">
+                <div className="text-center text-gray-300 text-sm py-12">
                   Aucun ami pour le moment
                 </div>
               ) : (
@@ -172,15 +159,17 @@ export default function MessagePage() {
                   <button
                     key={friend.id}
                     onClick={() => setSelectedFriend(friend)}
-                    className={`w-full flex items-center gap-3 p-3 hover:bg-gray-50 transition ${
-                      selectedFriend?.id === friend.id ? 'bg-blue-50' : ''
+                    className={`w-full flex items-center gap-3 px-4 py-3 transition-colors duration-100 ${
+                      selectedFriend?.id === friend.id
+                        ? 'bg-gray-100'
+                        : 'hover:bg-gray-50'
                     }`}
                   >
                     <Avatar userId={friend.id} size="md" />
-                    <div className="flex-1 text-left">
-                      <p className="font-semibold">{friend.username}</p>
-                      <p className="text-sm text-gray-500 truncate">
-                        {friend.lastMessage || 'Cliquez pour commencer à discuter'}
+                    <div className="flex-1 text-left min-w-0">
+                      <p className="text-sm font-medium text-gray-800">{friend.username}</p>
+                      <p className="text-xs text-gray-400 truncate mt-0.5">
+                        {friend.lastMessage || 'Commencer à discuter'}
                       </p>
                     </div>
                   </button>
@@ -190,17 +179,17 @@ export default function MessagePage() {
           </div>
 
           {/* Zone de chat */}
-          <div className="flex-1 flex flex-col">
+          <div className="flex-1 flex flex-col min-w-0">
             {selectedFriend ? (
               <>
                 {/* En-tête */}
-                <div className="p-4 border-b flex items-center gap-3">
+                <div className="px-5 py-3.5 border-b border-gray-100 flex items-center gap-3">
                   <Avatar userId={selectedFriend.id} size="md" />
                   <div>
-                    <h2 className="font-bold">{selectedFriend.username}</h2>
-                    <div className="flex items-center gap-1">
-                      <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-gray-400'}`}></div>
-                      <span className="text-xs text-gray-500">
+                    <p className="text-sm font-semibold text-gray-800">{selectedFriend.username}</p>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <div className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-emerald-400' : 'bg-gray-300'}`}></div>
+                      <span className="text-xs text-gray-400">
                         {isConnected ? 'En ligne' : 'Hors ligne'}
                       </span>
                     </div>
@@ -208,30 +197,30 @@ export default function MessagePage() {
                 </div>
 
                 {/* Messages */}
-                <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
+                <div className="flex-1 overflow-y-auto px-5 py-4 bg-gray-50/50 flex flex-col gap-3">
                   {messages.length === 0 ? (
-                    <div className="text-center text-gray-500 py-10">
+                    <div className="text-center text-gray-300 text-sm py-12">
                       Aucun message. Commencez la conversation !
                     </div>
                   ) : (
                     messages.map((msg, index) => (
                       <div
                         key={index}
-                        className={`flex mb-4 ${msg.senderId === user?.id ? 'justify-end' : 'justify-start'}`}
+                        className={`flex items-end gap-2 ${msg.senderId === user?.id ? 'flex-row-reverse' : ''}`}
                       >
                         {msg.senderId !== user?.id && (
-                          <Avatar userId={msg.senderId} size="sm" className="mr-2" />
+                          <Avatar userId={msg.senderId} size="sm" />
                         )}
                         <div
-                          className={`max-w-[70%] rounded-lg p-3 ${
+                          className={`max-w-[68%] px-3.5 py-2 rounded-2xl text-sm leading-relaxed break-words ${
                             msg.senderId === user?.id
-                              ? 'bg-blue-500 text-white'
-                              : 'bg-white border shadow-sm'
+                              ? 'bg-gray-900 text-white rounded-br-sm'
+                              : 'bg-white text-gray-800 border border-gray-100 rounded-bl-sm'
                           }`}
                         >
-                          <p className="overflow-wrap-break-word">{msg.content}</p>
-                          <p className={`text-xs mt-1 ${msg.senderId === user?.id ? 'text-blue-200' : 'text-gray-400'}`}>
-                            {new Date(msg.createdAt).toLocaleTimeString()}
+                          <p>{msg.content}</p>
+                          <p className={`text-[10px] mt-1 ${msg.senderId === user?.id ? 'text-gray-400' : 'text-gray-300'}`}>
+                            {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </p>
                         </div>
                       </div>
@@ -241,29 +230,38 @@ export default function MessagePage() {
                 </div>
 
                 {/* Formulaire */}
-                <form onSubmit={sendMessage} className="p-4 border-t flex gap-2">
-                  <input
-                    type="text"
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    placeholder="Écrire un message..."
-                    className="flex-1 px-4 py-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <button
-                    type="submit"
-                    disabled={!newMessage.trim()}
-                    className="bg-blue-500 text-white px-6 py-2 rounded-full hover:bg-blue-600 disabled:opacity-50 transition"
-                  >
-                    Envoyer
-                  </button>
-                </form>
+                <div className="px-4 py-3 border-t border-gray-100 bg-white">
+                  <form onSubmit={sendMessage} className="flex gap-2.5 items-center">
+                    <input
+                      type="text"
+                      value={newMessage}
+                      onChange={(e) => setNewMessage(e.target.value)}
+                      placeholder="Écrire un message..."
+                      className="flex-1 px-4 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-full focus:outline-none focus:ring-1 focus:ring-gray-300 focus:border-gray-300 transition-all duration-150 placeholder:text-gray-300"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!newMessage.trim()}
+                      className="px-4 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-full hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-150 flex items-center gap-1.5 shrink-0"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                      </svg>
+                      Envoyer
+                    </button>
+                  </form>
+                </div>
               </>
             ) : (
-              <div className="flex-1 flex items-center justify-center text-gray-500">
-                Sélectionnez une conversation pour commencer
+              <div className="flex-1 flex flex-col items-center justify-center gap-2 text-gray-300">
+                <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                </svg>
+                <p className="text-sm">Sélectionnez une conversation</p>
               </div>
             )}
           </div>
+
         </div>
       </Card>
     </div>

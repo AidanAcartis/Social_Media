@@ -99,12 +99,16 @@ export default function PostCard({ post, onDelete, onReaction }) {
         )}
       </div>
       
-      {/* Contenu du post */}
+      {/* Contenu du post - Photo de couverture agrandie */}
       <div className="px-5 pb-3">
         <p className="text-gray-800 whitespace-pre-wrap leading-relaxed">{post.content}</p>
         {post.image && (
           <div className="mt-4 rounded-xl overflow-hidden bg-gray-100">
-            <img src={post.image} alt="Post image" className="w-full object-cover max-h-96 hover:scale-105 transition-transform duration-500" />
+            <img 
+              src={post.image} 
+              alt="Post image" 
+              className="w-full object-cover max-h-[125] hover:scale-105 transition-transform duration-500" 
+            />
           </div>
         )}
       </div>

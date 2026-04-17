@@ -21,7 +21,7 @@ const searchRoutes = require('./routes/searchRoutes');
 
 const app = express();
 
-// Middleware CORS amélioré
+// Middleware
 app.use(cors({
   origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
   credentials: true,
@@ -29,9 +29,7 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'Cookie']
 }));
 
-// Gérer explicitement les requêtes OPTIONS
 app.options('*', cors());
-
 app.use(express.json());
 app.use(cookieParser());
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
@@ -48,6 +46,7 @@ app.use('/api/comments', commentRoutes);
 app.use('/api/reactions', reactionRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/search', searchRoutes);
+
 
 // Health check
 app.get('/api/health', (req, res) => {
