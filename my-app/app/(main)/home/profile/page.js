@@ -14,8 +14,8 @@ import LocationForm from '../../../components/profile/LocationForm'
 import FriendList from '../../../components/profile/FriendList'
 import UserPhotos from '../../../components/profile/UserPhotos'
 
-const tabClasses = 'flex gap-1 md:px-3 py-1 items-center border-b-4 border-b-white cursor-pointer'
-const activeTabClasses = 'flex gap-1 md:px-3 py-1 items-center border-blue-500 border-b-4 text-blue-500 font-bold cursor-pointer'
+const tabClasses = 'flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-all duration-200'
+const activeTabClasses = 'flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl shadow-md shadow-blue-200'
 
 export default function ProfilePage() {
   const { user, loading: authLoading } = useAuth()
@@ -25,7 +25,6 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true)
   const [userInfo, setUserInfo] = useState(null)
 
-  // Récupérer les informations utilisateur
   useEffect(() => {
     if (user) {
       fetchUserInfo()
@@ -83,109 +82,149 @@ export default function ProfilePage() {
 
   if (authLoading) {
     return (
-      <div className="text-center py-10">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+      <div className="flex justify-center items-center py-20">
+        <div className="animate-spin rounded-full h-10 w-10 border-2 border-blue-500 border-t-transparent"></div>
       </div>
     )
   }
 
   return (
-    <div>
-      <Card noPadding>
-        <div className="relative overflow-hidden rounded-md">
-          <Cover editable={true} />
-          <div className="relative">
-            <div className="absolute bottom-2 top-0 left-6">
-              <Avatar size="lg" editable={true} />
+    <div className="space-y-6">
+      {/* Carte de profil */}
+      <Card noPadding className="overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300">
+        <Cover editable={true} />
+        <div className="relative px-6 pb-6">
+          <div className="absolute -top-12 left-6">
+            <Avatar size="lg" editable={true} />
+          </div>
+          <div className="pt-14 pl-28 md:pl-36">
+            <h1 className="text-2xl font-bold text-gray-900">{user?.username || 'Chargement...'}</h1>
+            <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-sm text-gray-500">
+              <span className="flex items-center gap-1">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                {user?.email}
+              </span>
+              <span className="flex items-center gap-1">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                Membre depuis {userInfo?.createdAt ? new Date(userInfo.createdAt).toLocaleDateString() : '...'}
+              </span>
             </div>
-            <div className="p-4 pt-0 md:pt-4 pb-8">
-              <div className="ml-24 md:ml-40">
-                <h1 className="text-2xl font-bold">{user?.username || 'Chargement...'}</h1>
-                <div className="text-gray-500 text-sm">
-                  {user?.email}
-                </div>
-                <div className="text-gray-500 text-sm">
-                  Membre depuis {userInfo?.createdAt ? new Date(userInfo.createdAt).toLocaleDateString() : '...'}
-                </div>
-              </div>
-              <div className="mt-4 md:mt-10 flex gap-5 text-sm">
-                <button onClick={() => handleTabChange('posts')} className={activeTab === 'posts' ? activeTabClasses : tabClasses}>
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="size-5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
-                  </svg>
-                  <span className="hidden sm:block">Posts</span>
-                </button>
-                <button onClick={() => handleTabChange('about')} className={activeTab === 'about' ? activeTabClasses : tabClasses}>
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="size-5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
-                  </svg>
-                  <span className="hidden sm:block">À propos</span>
-                </button>
-                <button onClick={() => handleTabChange('friends')} className={activeTab === 'friends' ? activeTabClasses : tabClasses}>
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="size-5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 3a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Zm-13.5 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z" />
-                  </svg>
-                  <span className="hidden sm:block">Amis</span>
-                </button>
-                <button onClick={() => handleTabChange('photos')} className={activeTab === 'photos' ? activeTabClasses : tabClasses}>
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="size-5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 0 1 4.5 9.75h15A2.25 2.25 0 0 1 21.75 12v.75m-8.69-6.44-2.12-2.12a1.5 1.5 0 0 0-1.061-.44H4.5A2.25 2.25 0 0 0 2.25 6v12a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9a2.25 2.25 0 0 0-2.25-2.25h-5.379a1.5 1.5 0 0 1-1.06-.44Z" />
-                  </svg>
-                  <span className="hidden sm:block">Médias</span>
-                </button>
-              </div>
-            </div>
+          </div>
+
+          {/* Navigation des onglets */}
+          <div className="flex flex-wrap gap-2 mt-6 pt-4 border-t border-gray-100">
+            <button onClick={() => handleTabChange('posts')} className={activeTab === 'posts' ? activeTabClasses : tabClasses}>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+              </svg>
+              Publications
+            </button>
+            <button onClick={() => handleTabChange('about')} className={activeTab === 'about' ? activeTabClasses : tabClasses}>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+              À propos
+            </button>
+            <button onClick={() => handleTabChange('friends')} className={activeTab === 'friends' ? activeTabClasses : tabClasses}>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM6 7a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              Amis
+            </button>
+            <button onClick={() => handleTabChange('photos')} className={activeTab === 'photos' ? activeTabClasses : tabClasses}>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+              </svg>
+              Médias
+            </button>
           </div>
         </div>
       </Card>
 
-      {/* Contenu selon l'onglet actif */}
-      {activeTab === 'posts' && (
-        <div className="space-y-5 mt-5">
-          {loading ? (
-            <div className="text-center py-10">Chargement des publications...</div>
-          ) : userPosts.length > 0 ? (
-            userPosts.map(post => (
-              <PostCard key={post.id} post={post} onDelete={handlePostDeleted} />
-            ))
-          ) : (
+      {/* Contenu des onglets avec animations */}
+      <div className="animate-fade-in">
+        {activeTab === 'posts' && (
+          <div className="space-y-5">
+            {loading ? (
+              <Card className="flex justify-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-2 border-blue-500 border-t-transparent"></div>
+              </Card>
+            ) : userPosts.length > 0 ? (
+              userPosts.map(post => (
+                <PostCard key={post.id} post={post} onDelete={handlePostDeleted} />
+              ))
+            ) : (
+              <Card className="text-center py-12">
+                <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+                  <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                  </svg>
+                </div>
+                <p className="text-gray-500">Aucune publication pour le moment</p>
+              </Card>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'about' && (
+          <div className="space-y-5">
             <Card>
-              <p className="text-center text-gray-500 py-5">Aucune publication pour le moment</p>
+              <div className="flex items-center gap-3 mb-5">
+                <div className="w-10 h-10 bg-linear-to-br from-blue-400 to-blue-600 rounded-xl flex items-center justify-center">
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                </div>
+                <h2 className="text-xl font-semibold text-gray-900">À propos de moi</h2>
+              </div>
+              <AboutMeForm userId={user?.id} />
             </Card>
-          )}
-        </div>
-      )}
+            <Card>
+              <div className="flex items-center gap-3 mb-5">
+                <div className="w-10 h-10 bg-linear-to-br from-green-400 to-emerald-600 rounded-xl flex items-center justify-center">
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0zM19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+                  </svg>
+                </div>
+                <h2 className="text-xl font-semibold text-gray-900">Localisation</h2>
+              </div>
+              <LocationForm userId={user?.id} />
+            </Card>
+          </div>
+        )}
 
-      {activeTab === 'about' && (
-        <div className="mt-5">
+        {activeTab === 'friends' && (
           <Card>
-            <h2 className="font-bold text-2xl mb-4">À propos de moi</h2>
-            <AboutMeForm userId={user?.id} />
-          </Card>
-          <Card>
-            <h2 className="font-bold text-2xl mb-4">Localisation</h2>
-            <LocationForm userId={user?.id} />
-          </Card>
-        </div>
-      )}
-
-      {activeTab === 'friends' && (
-        <div className="mt-5">
-          <Card>
-            <h2 className="font-bold text-2xl mb-4">Mes amis</h2>
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-10 h-10 bg-linear-to-br from-purple-400 to-purple-600 rounded-xl flex items-center justify-center">
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM6 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </div>
+              <h2 className="text-xl font-semibold text-gray-900">Mes amis</h2>
+            </div>
             <FriendList userId={user?.id} />
           </Card>
-        </div>
-      )}
+        )}
 
-      {activeTab === 'photos' && (
-        <div className="mt-5">
+        {activeTab === 'photos' && (
           <Card>
-            <h2 className="font-bold text-2xl mb-4">Mes fichiers</h2>
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-10 h-10 bg-linear-to-br from-amber-400 to-orange-600 rounded-xl flex items-center justify-center">
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5z" />
+                </svg>
+              </div>
+              <h2 className="text-xl font-semibold text-gray-900">Mes fichiers</h2>
+            </div>
             <UserPhotos userId={user?.id} />
           </Card>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }
