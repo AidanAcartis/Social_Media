@@ -235,8 +235,7 @@ export default function PostCard({ post, onDelete, onReaction, onCommentAdded, o
       <div className="px-4 pb-2">
         <p className="text-gray-700 whitespace-pre-wrap text-sm leading-relaxed">{post.content}</p>
         
-        {/* Image du post */}
-       {/* Image du post */}
+        {/* Afficher le fichier selon son type */}
 {post.image && !imageError && (
   <div className="mt-3">
     {!imageLoaded && (
@@ -248,14 +247,48 @@ export default function PostCard({ post, onDelete, onReaction, onCommentAdded, o
         </div>
       </div>
     )}
-    <img 
-      src={`http://localhost:5000${post.image}`}
-      alt="Post image"
-      onLoad={() => setImageLoaded(true)}
-      onError={() => setImageError(true)}
-      className={`w-full rounded-xl object-contain bg-gray-50 ${imageLoaded ? 'opacity-100' : 'opacity-0 hidden'}`}
-      style={{ aspectRatio: '1/1', maxHeight: '250px' }}
-    />
+    
+    {/* Vidéo */}
+    {post.doc_type === 'video' ? (
+      <video 
+        controls 
+        className="w-full rounded-xl bg-gray-50"
+        style={{ aspectRatio: '16/9', maxHeight: '250px' }}
+        onLoadedData={() => setImageLoaded(true)}
+      >
+        <source src={`http://localhost:5000${post.image}`} type="video/mp4" />
+        Votre navigateur ne supporte pas la lecture vidéo.
+      </video>
+    ) : post.doc_type === 'pdf' ? (
+      <a 
+        href={`http://localhost:5000${post.image}`} 
+        target="_blank" 
+        rel="noopener noreferrer"
+        className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-200 hover:bg-gray-100 transition-colors"
+        style={{ maxHeight: '100px' }}
+      >
+        <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+        </svg>
+        <div className="flex-1">
+          <p className="text-sm font-medium text-gray-700">Document PDF</p>
+          <p className="text-xs text-gray-400">Cliquez pour ouvrir</p>
+        </div>
+        <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+        </svg>
+      </a>
+    ) : (
+      /* Image */
+      <img 
+        src={`http://localhost:5000${post.image}`}
+        alt="Post image"
+        onLoad={() => setImageLoaded(true)}
+        onError={() => setImageError(true)}
+        className={`w-full rounded-xl object-contain bg-gray-50 ${imageLoaded ? 'opacity-100' : 'opacity-0 hidden'}`}
+        style={{ aspectRatio: '1/1', maxHeight: '250px' }}
+      />
+    )}
   </div>
 )}
       </div>

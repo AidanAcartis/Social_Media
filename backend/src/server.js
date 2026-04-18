@@ -591,24 +591,35 @@ app.get('/api/debug/cover/:userId', async (req, res) => {
 // ========== ROUTES POUR LES POSTS ==========
 
 // Créer un post
-// Créer un post
-app.post('/api/posts', authenticateToken, upload.single('image'), async (req, res) => {
+// Créer un post (supporte images, vidéos, PDFs)
+app.post('/api/posts', authenticateToken, upload.single('file'), async (req, res) => {
   console.log('=== CREATE POST ===');
+  console.log('req.file:', req.file);
+  console.log('req.body:', req.body);
   
   const userId = req.user.id;
   const content = req.body.content || '';
-  const imagePath = req.file ? `/uploads/posts/${req.file.filename}` : null;
+  const filePath = req.file ? `/uploads/posts/${req.file.filename}` : null;
   
   // Détecter le type de fichier
   let docType = null;
-  if (imagePath) {
-    docType = detectFileType(imagePath);
+  if (filePath) {
+    const mimeType = req.file.mimetype;
+    if (mimeType.startsWith('image/')) {
+      docType = 'photo';
+    } else if (mimeType.startsWith('video/')) {
+      docType = 'video';
+    } else if (mimeType === 'application/pdf') {
+      docType = 'pdf';
+    } else {
+      docType = 'other';
+    }
   }
   
   try {
     const [result] = await promisePool.query(
       'INSERT INTO posts (user_id, content, image, doc_type, created_at) VALUES (?, ?, ?, ?, NOW())',
-      [userId, content, imagePath, docType]
+      [userId, content, filePath, docType]
     );
     
     // Récupérer le post créé avec les infos utilisateur

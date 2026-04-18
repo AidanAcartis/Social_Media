@@ -24,7 +24,7 @@ const storage = multer.diskStorage({
     let folder = 'uploads/';
     if (file.fieldname === 'avatar') folder += 'profiles';
     else if (file.fieldname === 'cover') folder += 'covers';
-    else if (file.fieldname === 'image') folder += 'posts';
+    else if (file.fieldname === 'file' || file.fieldname === 'image') folder += 'posts';
     else if (file.fieldname === 'proof') folder += 'proofs';
     else folder += 'posts';
     cb(null, folder);
@@ -36,21 +36,28 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = (req, file, cb) => {
-  const allowedTypes = /jpeg|jpg|png|gif|mp4|pdf/;
-  const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-  const mimetype = allowedTypes.test(file.mimetype);
+  // Types de fichiers autorisés
+  const allowedTypes = [
+    'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/bmp',
+    'video/mp4', 'video/webm', 'video/ogg', 'video/quicktime',
+    'application/pdf'
+  ];
   
-  if (mimetype && extname) {
+  // Extensions autorisées
+  const allowedExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.mp4', '.webm', '.ogg', '.mov', '.pdf'];
+  const ext = path.extname(file.originalname).toLowerCase();
+  
+  if (allowedTypes.includes(file.mimetype) && allowedExtensions.includes(ext)) {
     cb(null, true);
   } else {
-    cb(new Error('Type de fichier non supporté'));
+    cb(new Error('Type de fichier non supporté. Formats acceptés: images (jpg, png, gif, webp), vidéos (mp4, webm), PDF'), false);
   }
 };
 
 const upload = multer({ 
   storage, 
   fileFilter,
-  limits: { fileSize: 10 * 1024 * 1024 } // 10MB
+  limits: { fileSize: 50 * 1024 * 1024 } // 50MB pour les vidéos
 });
 
 module.exports = { upload };

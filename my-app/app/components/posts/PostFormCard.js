@@ -8,48 +8,70 @@ import Avatar from '../ui/Avatar'
 export default function PostFormCard({ onPostCreated }) {
   const { user } = useAuth()
   const [content, setContent] = useState('')
-  const [image, setImage] = useState(null)
-  const [imagePreview, setImagePreview] = useState(null)
+  const [file, setFile] = useState(null)
+  const [filePreview, setFilePreview] = useState(null)
+  const [fileType, setFileType] = useState(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showUpload, setShowUpload] = useState(false)
   const fileInputRef = useRef(null)
   const textareaRef = useRef(null)
 
-  const handleImageSelect = (e) => {
-    const file = e.target.files[0]
-    if (file && file.type.startsWith('image/')) {
-      setImage(file)
-      setImagePreview(URL.createObjectURL(file))
+  const handleFileSelect = (e) => {
+    const selectedFile = e.target.files[0]
+    if (!selectedFile) return
+
+    // Détecter le type de fichier
+    const fileType_ = selectedFile.type
+    let type = 'other'
+    
+    if (fileType_.startsWith('image/')) {
+      type = 'image'
+    } else if (fileType_.startsWith('video/')) {
+      type = 'video'
+    } else if (fileType_.startsWith('application/pdf')) {
+      type = 'pdf'
+    }
+
+    setFile(selectedFile)
+    setFileType(type)
+
+    // Créer un aperçu
+    if (type === 'image') {
+      setFilePreview(URL.createObjectURL(selectedFile))
+    } else if (type === 'video') {
+      setFilePreview(URL.createObjectURL(selectedFile))
+    } else if (type === 'pdf') {
+      setFilePreview('/pdf-icon.svg') // Icône PDF par défaut
     }
   }
 
-  const removeImage = () => {
-    setImage(null)
-    setImagePreview(null)
+  const removeFile = () => {
+    setFile(null)
+    setFilePreview(null)
+    setFileType(null)
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if ((!content.trim() && !image) || !user) return
+    if ((!content.trim() && !file) || !user) return
 
     setIsSubmitting(true)
     const formData = new FormData()
     formData.append('content', content)
-    if (image) formData.append('image', image)
+    if (file) formData.append('file', file)
 
     try {
-      // Dans handleSubmit, assure-toi que l'URL est correcte
-        const response = await fetch('http://localhost:5000/api/posts', {
-          method: 'POST',
-          credentials: 'include',
-          body: formData
-        })
+      const response = await fetch('http://localhost:5000/api/posts', {
+        method: 'POST',
+        credentials: 'include',
+        body: formData
+      })
 
       if (response.ok) {
         const newPost = await response.json()
         setContent('')
-        removeImage()
+        removeFile()
         setShowUpload(false)
         onPostCreated?.(newPost)
       } else {
@@ -62,6 +84,68 @@ export default function PostFormCard({ onPostCreated }) {
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  const renderPreview = () => {
+    if (!filePreview) return null
+
+    if (fileType === 'image') {
+      return (
+        <div className="mt-2 relative inline-block group/preview">
+          <img
+            src={filePreview}
+            alt="Aperçu"
+            className="h-20 w-auto rounded-lg object-cover shadow-sm border border-gray-200 transition-all duration-200 group-hover/preview:scale-105"
+          />
+          <button
+            type="button"
+            onClick={removeFile}
+            className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold hover:bg-red-600 transition-all duration-150 shadow-sm"
+          >
+            ×
+          </button>
+        </div>
+      )
+    }
+
+    if (fileType === 'video') {
+      return (
+        <div className="mt-2 relative inline-block group/preview">
+          <video className="h-20 w-auto rounded-lg object-cover shadow-sm border border-gray-200">
+            <source src={filePreview} />
+          </video>
+          <button
+            type="button"
+            onClick={removeFile}
+            className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold hover:bg-red-600 transition-all duration-150 shadow-sm"
+          >
+            ×
+          </button>
+        </div>
+      )
+    }
+
+    if (fileType === 'pdf') {
+      return (
+        <div className="mt-2 relative inline-block group/preview">
+          <div className="h-16 w-16 bg-red-100 rounded-lg flex items-center justify-center shadow-sm border border-gray-200">
+            <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 7h.01M7 11h.01M7 15h.01" />
+            </svg>
+          </div>
+          <button
+            type="button"
+            onClick={removeFile}
+            className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold hover:bg-red-600 transition-all duration-150 shadow-sm"
+          >
+            ×
+          </button>
+        </div>
+      )
+    }
+
+    return null
   }
 
   if (!user) return null
@@ -82,43 +166,56 @@ export default function PostFormCard({ onPostCreated }) {
               rows={2}
             />
             
-            {/* Upload d'image */}
+            {/* Upload de fichiers */}
             {showUpload && (
               <div className="mt-2 animate-fade-in">
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-500 bg-gray-100 rounded-full hover:bg-gray-200 hover:text-gray-700 transition-all duration-150 group"
-                >
-                  <svg className="w-3.5 h-3.5 group-hover:scale-105 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Z" />
-                  </svg>
-                  Photo
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-500 bg-gray-100 rounded-full hover:bg-gray-200 hover:text-gray-700 transition-all duration-150 group"
+                  >
+                    <svg className="w-3.5 h-3.5 group-hover:scale-105 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Z" />
+                    </svg>
+                    Photo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      fileInputRef.current.accept = 'video/*'
+                      fileInputRef.current.click()
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-500 bg-gray-100 rounded-full hover:bg-gray-200 hover:text-gray-700 transition-all duration-150 group"
+                  >
+                    <svg className="w-3.5 h-3.5 group-hover:scale-105 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.055-1.079.146-1.445.489a5.25 5.25 0 01-2.826 1.349 6 6 0 01-5.384-2.364m6-6.75a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    Vidéo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      fileInputRef.current.accept = '.pdf'
+                      fileInputRef.current.click()
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-500 bg-gray-100 rounded-full hover:bg-gray-200 hover:text-gray-700 transition-all duration-150 group"
+                  >
+                    <svg className="w-3.5 h-3.5 group-hover:scale-105 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                    </svg>
+                    PDF
+                  </button>
+                </div>
                 <input
                   type="file"
                   ref={fileInputRef}
-                  onChange={handleImageSelect}
-                  accept="image/*"
+                  onChange={handleFileSelect}
+                  accept="image/*,video/*,.pdf"
                   className="hidden"
                 />
                 
-                {imagePreview && (
-                  <div className="mt-2 relative inline-block group/preview">
-                    <img
-                      src={imagePreview}
-                      alt="Aperçu"
-                      className="h-20 w-auto rounded-lg object-cover shadow-sm border border-gray-200 transition-all duration-200 group-hover/preview:scale-105"
-                    />
-                    <button
-                      type="button"
-                      onClick={removeImage}
-                      className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold hover:bg-red-600 transition-all duration-150 shadow-sm"
-                    >
-                      ×
-                    </button>
-                  </div>
-                )}
+                {renderPreview()}
               </div>
             )}
           </div>
@@ -127,7 +224,7 @@ export default function PostFormCard({ onPostCreated }) {
         <div className="flex justify-end px-5 pb-4 pt-2 border-t border-gray-100">
           <button
             type="submit"
-            disabled={isSubmitting || (!content.trim() && !image)}
+            disabled={isSubmitting || (!content.trim() && !file)}
             className="px-4 py-1.5 bg-gray-900 text-white text-xs font-medium rounded-full hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 flex items-center gap-1.5 shadow-sm"
           >
             {isSubmitting ? (
