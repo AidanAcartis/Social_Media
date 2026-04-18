@@ -21,9 +21,23 @@
 }
 
 /* Styles globaux */
-body {
+/* body {
   background-color: #F7F5F8;
   color: #333;
+} */
+
+/* body {
+  background-color: #525252;
+  color: #1a1a1a;
+} */
+
+body {
+  background: linear-gradient(135deg, #454546 0%, #3d3d3d 100%);
+}
+
+/* body {
+  background-color: #121212;
+  color: #e5e7eb; Texte gris très clair au lieu de noir
 }
 
 /* Composants personnalisés (utilisez @utility au lieu de @layer components dans v4) */

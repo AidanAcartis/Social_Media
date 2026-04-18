@@ -590,7 +590,6 @@ app.get('/api/debug/cover/:userId', async (req, res) => {
 
 // ========== ROUTES POUR LES POSTS ==========
 
-// Créer un post
 // Créer un post (supporte images, vidéos, PDFs)
 app.post('/api/posts', authenticateToken, upload.single('file'), async (req, res) => {
   console.log('=== CREATE POST ===');
@@ -617,9 +616,10 @@ app.post('/api/posts', authenticateToken, upload.single('file'), async (req, res
   }
   
   try {
+    // INSÉRER DANS LES DEUX COLONNES POUR COHÉRENCE
     const [result] = await promisePool.query(
-      'INSERT INTO posts (user_id, content, image, doc_type, created_at) VALUES (?, ?, ?, ?, NOW())',
-      [userId, content, filePath, docType]
+      'INSERT INTO posts (user_id, content, image, doc_url, doc_type, created_at) VALUES (?, ?, ?, ?, ?, NOW())',
+      [userId, content, filePath, filePath, docType] // ← image ET doc_url
     );
     
     // Récupérer le post créé avec les infos utilisateur
@@ -634,7 +634,7 @@ app.post('/api/posts', authenticateToken, upload.single('file'), async (req, res
     res.status(201).json({
       id: newPost[0].id,
       content: newPost[0].content,
-      image: newPost[0].image,
+      image: newPost[0].image || newPost[0].doc_url, // ← PRIORISER image
       doc_type: newPost[0].doc_type,
       createdAt: newPost[0].created_at,
       reactionCount: 0,
@@ -674,7 +674,8 @@ app.get('/api/posts/user/:userId', authenticateToken, async (req, res) => {
     const formattedPosts = posts.map(post => ({
       id: post.id,
       content: post.content,
-      image: post.image,
+      image: post.image || post.doc_url, // ← AJOUTER CETTE LIGNE
+      doc_type: post.doc_type,
       createdAt: post.created_at,
       reactionCount: post.reactionCount || 0,
       commentCount: post.commentCount || 0,
@@ -692,7 +693,6 @@ app.get('/api/posts/user/:userId', authenticateToken, async (req, res) => {
   }
 });
 
-// Récupérer le feed (tous les posts)
 // Récupérer le feed (tous les posts)
 app.get('/api/posts/feed', authenticateToken, async (req, res) => {
   const userId = req.user.id;
@@ -715,7 +715,8 @@ app.get('/api/posts/feed', authenticateToken, async (req, res) => {
     const formattedPosts = posts.map(post => ({
       id: post.id,
       content: post.content,
-      image: post.image,
+      image: post.image || post.doc_url, // ← UTILISER image OU doc_url
+      doc_type: post.doc_type,
       createdAt: post.created_at,
       reactionCount: post.reactionCount || 0,
       commentCount: post.commentCount || 0,
