@@ -1810,6 +1810,26 @@ app.get('/api/posts/:postId/reactions/top', authenticateToken, async (req, res) 
   }
 });
 
+// Compter le nombre d'amis d'un utilisateur
+app.get('/api/friends/count', authenticateToken, async (req, res) => {
+  const { userId } = req.query;
+  
+  try {
+    const [friends] = await promisePool.query(
+      `SELECT COUNT(*) as count 
+       FROM followers 
+       WHERE (follower_id = ? OR followed_id = ?) 
+         AND status = 'accepted'`,
+      [userId, userId]
+    );
+    
+    res.json({ friends: friends[0].count });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
 // Démarrer le serveur
 server.listen(PORT, () => {
   console.log(`🚀 Serveur démarré sur http://localhost:${PORT}`);

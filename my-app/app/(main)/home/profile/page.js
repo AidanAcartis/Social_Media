@@ -24,11 +24,13 @@ export default function ProfilePage() {
   const [userPosts, setUserPosts] = useState([])
   const [loading, setLoading] = useState(true)
   const [userInfo, setUserInfo] = useState(null)
+  const [profileUser, setProfileUser] = useState(null)
 
   useEffect(() => {
     if (user) {
       fetchUserInfo()
       fetchUserPosts()
+      fetchUserProfile()
     }
   }, [user])
 
@@ -43,6 +45,23 @@ export default function ProfilePage() {
       }
     } catch (error) {
       console.error('Error fetching user info:', error)
+    }
+  }
+
+    const fetchUserProfile = async () => {
+    try {
+      const response = await fetch(`http://localhost:5000/api/users/${user?.id}`, {
+        credentials: 'include'
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setProfileUser({
+          ...data,
+          createdAt: data.created_at || data.createdAt
+        })
+      }
+    } catch (error) {
+      console.error('Error fetching user:', error)
     }
   }
 
@@ -110,7 +129,7 @@ export default function ProfilePage() {
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
-                Membre depuis {userInfo?.createdAt ? new Date(userInfo.createdAt).toLocaleDateString() : '...'}
+                Membre depuis {profileUser?.created_at ? new Date(profileUser.created_at).toLocaleDateString() : profileUser?.createdAt ? new Date(profileUser.createdAt).toLocaleDateString() : '...'}
               </span>
             </div>
           </div>

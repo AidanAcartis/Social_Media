@@ -1,10 +1,12 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { useAuth } from '../../context/AuthContext'
 import Avatar from '../ui/Avatar'
 
 export default function FriendList({ onSelectFriend, selectedFriendId }) {
+  const router = useRouter()
   const { user } = useAuth()
   const [friends, setFriends] = useState([])
   const [pendingRequests, setPendingRequests] = useState([])
@@ -86,7 +88,6 @@ export default function FriendList({ onSelectFriend, selectedFriendId }) {
         body: JSON.stringify({ followed_id: userId })
       })
       if (response.ok) {
-        // Mettre à jour le statut dans les résultats de recherche
         setSearchResults(prev => prev.map(u => 
           u.id === userId ? { ...u, requestSent: true, status: 'pending' } : u
         ))
@@ -132,6 +133,10 @@ export default function FriendList({ onSelectFriend, selectedFriendId }) {
     } catch (error) {
       console.error('Error rejecting request:', error)
     }
+  }
+
+  const goToProfile = (userId) => {
+    router.push(`/home/followedPage/${userId}`)
   }
 
   if (loading) {
@@ -185,7 +190,10 @@ export default function FriendList({ onSelectFriend, selectedFriendId }) {
             ) : searchResults.length > 0 ? (
               searchResults.map(result => (
                 <div key={result.id} className="flex items-center justify-between p-3 hover:bg-gray-50">
-                  <div className="flex items-center gap-3">
+                  <div 
+                    className="flex items-center gap-3 flex-1 cursor-pointer"
+                    onClick={() => goToProfile(result.id)}
+                  >
                     <Avatar userId={result.id} size="md" />
                     <div>
                       <p className="font-semibold text-sm">{result.username}</p>
@@ -262,13 +270,11 @@ export default function FriendList({ onSelectFriend, selectedFriendId }) {
                 friends.map(friend => (
                   <button
                     key={friend.id}
-                    onClick={() => onSelectFriend(friend)}
-                    className={`w-full flex items-center gap-3 p-3 hover:bg-gray-50 transition ${
-                      selectedFriendId === friend.id ? 'bg-blue-50' : ''
-                    }`}
+                    onClick={() => goToProfile(friend.id)}
+                    className="w-full flex items-center gap-3 p-3 hover:bg-gray-50 transition text-left"
                   >
                     <Avatar userId={friend.id} size="md" />
-                    <div className="flex-1 text-left">
+                    <div className="flex-1">
                       <p className="font-semibold text-sm">{friend.username}</p>
                       <p className="text-xs text-gray-500">{friend.email}</p>
                     </div>
@@ -288,7 +294,10 @@ export default function FriendList({ onSelectFriend, selectedFriendId }) {
               ) : (
                 pendingRequests.map(request => (
                   <div key={request.request_id} className="flex items-center justify-between p-3">
-                    <div className="flex items-center gap-3">
+                    <div 
+                      className="flex items-center gap-3 cursor-pointer flex-1"
+                      onClick={() => goToProfile(request.id)}
+                    >
                       <Avatar userId={request.id} size="md" />
                       <div>
                         <p className="font-semibold text-sm">{request.username}</p>
