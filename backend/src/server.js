@@ -87,7 +87,51 @@ socket.on('getForumMessages', async () => {
   }
 });
 
-  socket.on('sendForumMessage', async (data) => {
+  // Dans socket.on('sendPrivateMessage')
+// Dans socket.on('sendPrivateMessage')
+// socket.on('sendPrivateMessage', async (data) => {
+//   const { senderId, receiverId, content } = data;
+  
+//   try {
+//     const [result] = await promisePool.query(
+//       'INSERT INTO private_messages (sender_id, receiver_id, content) VALUES (?, ?, ?)',
+//       [senderId, receiverId, content]
+//     );
+    
+//     const [newMessage] = await promisePool.query(
+//       `SELECT pm.*, 
+//         u1.username as sender_username,
+//         u2.username as receiver_username
+//        FROM private_messages pm
+//        JOIN users u1 ON pm.sender_id = u1.id
+//        JOIN users u2 ON pm.receiver_id = u2.id
+//        WHERE pm.id = ?`,
+//       [result.insertId]
+//     );
+    
+//     // Créer une notification pour le destinataire
+//     await createNotification(receiverId, senderId, 'private_message', result.insertId, 'message');
+    
+//     // Envoyer UNIQUEMENT au destinataire (pas à tous ses sockets)
+//     // Utiliser socket.broadcast.to au lieu de io.to pour éviter les doublons
+//     socket.broadcast.to(`user_${receiverId}`).emit('newPrivateMessage', newMessage[0]);
+    
+//     // Ne pas renvoyer à l'expéditeur
+//     // socket.emit('newPrivateMessage', newMessage[0]); // ← Supprimer cette ligne
+    
+//     const [unreadCount] = await promisePool.query(
+//       'SELECT COUNT(*) as count FROM private_messages WHERE receiver_id = ? AND is_read = 0',
+//       [receiverId]
+//     );
+    
+//     io.to(`user_${receiverId}`).emit('unreadMessagesCount', { unreadCount: unreadCount[0].count });
+//   } catch (error) {
+//     console.error('Erreur sendPrivateMessage:', error);
+//   }
+// });
+
+// Dans socket.on('sendForumMessage')
+socket.on('sendForumMessage', async (data) => {
   const { senderId, username, content } = data;
   
   try {
@@ -99,11 +143,14 @@ socket.on('getForumMessages', async () => {
     const newMessage = {
       id: result.insertId,
       sender_id: senderId,
-      user_id: senderId,  // Ajoutez cette ligne
+      user_id: senderId,
       content: content,
       username: username,
       created_at: new Date()
     };
+    
+    // Notifier TOUS les amis (sauf l'expéditeur) du nouveau message forum
+    await notifyAllFriends(senderId, senderId, 'forum_message', result.insertId, 'forum');
     
     io.emit('newForumMessage', newMessage);
   } catch (error) {
@@ -166,52 +213,6 @@ socket.on('getNotifications', async (userId) => {
   }
 });
 
-  socket.on('sendPrivateMessage', async (data) => {
-    const { senderId, receiverId, content } = data;
-    
-    try {
-      const [result] = await promisePool.query(
-        'INSERT INTO private_messages (sender_id, receiver_id, content) VALUES (?, ?, ?)',
-        [senderId, receiverId, content]
-      );
-      
-      const [newMessage] = await promisePool.query(
-        `SELECT pm.*, 
-          u1.username as sender_username,
-          u2.username as receiver_username
-         FROM private_messages pm
-         JOIN users u1 ON pm.sender_id = u1.id
-         JOIN users u2 ON pm.receiver_id = u2.id
-         WHERE pm.id = ?`,
-        [result.insertId]
-      );
-      
-      io.to(`user_${receiverId}`).emit('newPrivateMessage', newMessage[0]);
-      socket.emit('newPrivateMessage', newMessage[0]);
-      
-      const [unreadCount] = await promisePool.query(
-        'SELECT COUNT(*) as count FROM private_messages WHERE receiver_id = ? AND is_read = 0',
-        [receiverId]
-      );
-      
-      io.to(`user_${receiverId}`).emit('unreadMessagesCount', { unreadCount: unreadCount[0].count });
-    } catch (error) {
-      console.error('Erreur sendPrivateMessage:', error);
-    }
-  });
-
-  socket.on('getNotifications', async (userId) => {
-    try {
-      const [notifications] = await promisePool.query(
-        'SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND is_read = 0',
-        [userId]
-      );
-      socket.emit('notificationUpdate', { unreadCount: notifications[0].count });
-    } catch (error) {
-      console.error('Erreur getNotifications:', error);
-    }
-  });
-
   socket.on('getUnreadMessages', async (userId) => {
     try {
       const [unreadCount] = await promisePool.query(
@@ -228,6 +229,97 @@ socket.on('getNotifications', async (userId) => {
     console.log('🔌 Utilisateur déconnecté:', socket.id);
   });
 });
+
+// ========== FONCTIONS DE NOTIFICATION ==========
+
+// Créer une notification générique
+// ========== FONCTIONS DE NOTIFICATION ==========
+
+// Créer une notification générique
+async function createNotification(userId, actorId, type, referenceId = null, referenceType = null) {
+  // 🔴 SOLUTION: Ne pas créer de notification si l'utilisateur s'auto-notifie
+  if (userId === actorId) {
+    console.log(`⏭️ Notification ignorée (auto-notification): user=${userId} ne peut pas recevoir sa propre notification`);
+    return null;
+  }
+  
+  try {
+    let query = 'INSERT INTO notifications (user_id, actor_id, type, is_read, created_at) VALUES (?, ?, ?, 0, NOW())';
+    let params = [userId, actorId, type];
+    
+    // Ajouter les références selon le type
+    if (referenceType === 'post') {
+      query = 'INSERT INTO notifications (user_id, actor_id, type, post_id, is_read, created_at) VALUES (?, ?, ?, ?, 0, NOW())';
+      params = [userId, actorId, type, referenceId];
+    } else if (referenceType === 'comment') {
+      query = 'INSERT INTO notifications (user_id, actor_id, type, comment_id, is_read, created_at) VALUES (?, ?, ?, ?, 0, NOW())';
+      params = [userId, actorId, type, referenceId];
+    } else if (referenceType === 'message') {
+      query = 'INSERT INTO notifications (user_id, actor_id, type, message_id, is_read, created_at) VALUES (?, ?, ?, ?, 0, NOW())';
+      params = [userId, actorId, type, referenceId];
+    } else if (referenceType === 'forum') {
+      query = 'INSERT INTO notifications (user_id, actor_id, type, forum_message_id, is_read, created_at) VALUES (?, ?, ?, ?, 0, NOW())';
+      params = [userId, actorId, type, referenceId];
+    }
+    
+    const [result] = await promisePool.query(query, params);
+    
+    // Récupérer la notification créée
+    const [notification] = await promisePool.query(
+      `SELECT n.*, u.username 
+       FROM notifications n
+       JOIN users u ON n.actor_id = u.id
+       WHERE n.id = ?`,
+      [result.insertId]
+    );
+    
+    // Émettre via Socket.IO uniquement si la notification existe
+    if (notification.length > 0) {
+      console.log(`🔔 Notification envoyée à user_${userId}: ${type} de ${notification[0].username}`);
+      io.to(`user_${userId}`).emit('newNotification', notification[0]);
+      
+      const [countResult] = await promisePool.query(
+        'SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND is_read = 0',
+        [userId]
+      );
+      
+      io.to(`user_${userId}`).emit('notificationUpdate', { 
+        unreadCount: countResult[0].count 
+      });
+    }
+    
+    return result.insertId;
+  } catch (error) {
+    console.error('Erreur création notification:', error);
+    return null;
+  }
+}
+
+// Notifier tous les amis d'un utilisateur (sauf l'expéditeur)
+async function notifyAllFriends(userId, actorId, type, referenceId = null, referenceType = null) {
+  try {
+    // Récupérer tous les amis de l'utilisateur
+    const [friends] = await promisePool.query(
+      `SELECT u.id 
+       FROM followers f
+       JOIN users u ON (u.id = f.follower_id OR u.id = f.followed_id)
+       WHERE (f.follower_id = ? OR f.followed_id = ?)
+         AND f.status = 'accepted'
+         AND u.id != ?
+       GROUP BY u.id`,
+      [userId, userId, actorId]
+    );
+    
+    // Créer une notification pour chaque ami
+    for (const friend of friends) {
+      await createNotification(friend.id, actorId, type, referenceId, referenceType);
+    }
+    
+    console.log(`📢 Notification ${type} envoyée à ${friends.length} amis`);
+  } catch (error) {
+    console.error('Erreur notification amis:', error);
+  }
+}
 
 // ========== ROUTES API ==========
 
@@ -364,6 +456,28 @@ app.post('/api/auth/logout', (req, res) => {
 // ========== ROUTES D'UPLOAD ==========
 const { authenticateToken } = require('./middleware/auth');
 const { upload } = require('./middleware/upload');
+
+
+// Route pour récupérer les infos d'un utilisateur
+app.get('/api/users/:id', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  
+  try {
+    const [users] = await promisePool.query(
+      'SELECT id, username, email, created_at FROM users WHERE id = ?',
+      [id]
+    );
+    
+    if (users.length === 0) {
+      return res.status(404).json({ message: 'Utilisateur non trouvé' });
+    }
+    
+    res.json(users[0]);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
 
 // Route pour l'avatar
 app.post('/api/users/avatar', authenticateToken, upload.single('avatar'), async (req, res) => {
@@ -1015,6 +1129,438 @@ app.get('/api/notifications/unread/count', authenticateToken, async (req, res) =
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ========== ROUTES NOTIFICATIONS ==========
+
+// Récupérer TOUTES les notifications
+app.get('/api/notifications', authenticateToken, async (req, res) => {
+  const userId = req.user.id;
+  
+  try {
+    const [notifications] = await promisePool.query(
+      `SELECT n.*, u.username 
+       FROM notifications n 
+       JOIN users u ON n.actor_id = u.id 
+       WHERE n.user_id = ?
+       ORDER BY n.created_at DESC
+       LIMIT 50`,
+      [userId]
+    );
+    
+    console.log(`📬 ${notifications.length} notifications trouvées pour l'utilisateur ${userId}`);
+    res.json(notifications);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// Marquer TOUTES les notifications comme lues
+app.put('/api/notifications/read', authenticateToken, async (req, res) => {
+  const userId = req.user.id;
+  
+  try {
+    const [result] = await promisePool.query(
+      'UPDATE notifications SET is_read = 1 WHERE user_id = ? AND is_read = 0',
+      [userId]
+    );
+    
+    console.log(`✅ ${result.affectedRows} notifications marquées comme lues pour l'utilisateur ${userId}`);
+    res.json({ message: 'Notifications marquées comme lues', count: result.affectedRows });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// Supprimer une notification spécifique
+app.delete('/api/notifications/:notificationId', authenticateToken, async (req, res) => {
+  const { notificationId } = req.params;
+  const userId = req.user.id;
+  
+  try {
+    const [result] = await promisePool.query(
+      'DELETE FROM notifications WHERE id = ? AND user_id = ?',
+      [notificationId, userId]
+    );
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Notification non trouvée' });
+    }
+    
+    console.log(`🗑️ Notification ${notificationId} supprimée pour l'utilisateur ${userId}`);
+    res.json({ message: 'Notification supprimée' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// Accepter une demande d'ami
+app.post('/api/friends/accept', authenticateToken, async (req, res) => {
+  const { request_id } = req.body;
+  const userId = req.user.id;
+  
+  try {
+    const [request] = await promisePool.query(
+      'SELECT follower_id, followed_id FROM followers WHERE id = ? AND followed_id = ? AND status = "pending"',
+      [request_id, userId]
+    );
+    
+    if (request.length === 0) {
+      return res.status(404).json({ status: 'error', message: 'Demande non trouvée' });
+    }
+    
+    await promisePool.query(
+      'UPDATE followers SET status = "accepted" WHERE id = ? AND followed_id = ? AND status = "pending"',
+      [request_id, userId]
+    );
+    
+    // Créer une notification pour l'autre utilisateur (friend_accepted)
+    const [notifResult] = await promisePool.query(
+      'INSERT INTO notifications (user_id, actor_id, type, is_read, created_at) VALUES (?, ?, "friend_accepted", 0, NOW())',
+      [request[0].follower_id, userId]
+    );
+    
+    // Émettre via Socket.IO
+    const [newNotification] = await promisePool.query(
+      `SELECT n.*, u.username 
+       FROM notifications n
+       JOIN users u ON n.actor_id = u.id
+       WHERE n.id = ?`,
+      [notifResult.insertId]
+    );
+    
+    if (newNotification.length > 0) {
+      io.to(`user_${request[0].follower_id}`).emit('newNotification', newNotification[0]);
+      
+      const [countResult] = await promisePool.query(
+        'SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND is_read = 0',
+        [request[0].follower_id]
+      );
+      
+      io.to(`user_${request[0].follower_id}`).emit('notificationUpdate', { 
+        unreadCount: countResult[0].count 
+      });
+    }
+    
+    res.json({ status: 'success', message: 'Demande acceptée' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ status: 'error', message: 'Erreur serveur' });
+  }
+});
+
+
+// Ajouter une réaction à un post
+app.post('/api/posts/:postId/reactions', authenticateToken, async (req, res) => {
+  const { postId } = req.params;
+  const userId = req.user.id;
+  const { type } = req.body;
+  
+  try {
+    // Récupérer l'auteur du post
+    const [post] = await promisePool.query(
+      'SELECT user_id FROM posts WHERE id = ?',
+      [postId]
+    );
+    
+    if (post.length === 0) {
+      return res.status(404).json({ message: 'Post non trouvé' });
+    }
+    
+    // Vérifier si l'utilisateur a déjà réagi
+    const [existing] = await promisePool.query(
+      'SELECT * FROM post_reactions WHERE post_id = ? AND user_id = ?',
+      [postId, userId]
+    );
+    
+    if (existing.length > 0) {
+      await promisePool.query(
+        'DELETE FROM post_reactions WHERE post_id = ? AND user_id = ?',
+        [postId, userId]
+      );
+    }
+    
+    await promisePool.query(
+      'INSERT INTO post_reactions (post_id, user_id, reaction_type) VALUES (?, ?, ?)',
+      [postId, userId, type]
+    );
+    
+    // Créer une notification pour l'auteur du post (sauf si c'est lui-même)
+    if (post[0].user_id !== userId) {
+      await createNotification(post[0].user_id, userId, 'reaction', postId, 'post');
+    }
+    
+    const [countResult] = await promisePool.query(
+      'SELECT COUNT(*) as count FROM post_reactions WHERE post_id = ?',
+      [postId]
+    );
+    
+    res.json({ success: true, count: countResult[0].count, reaction: type });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+// Ajouter un commentaire
+app.post('/api/posts/:postId/comments', authenticateToken, async (req, res) => {
+  const { postId } = req.params;
+  const userId = req.user.id;
+  const { content } = req.body;
+  
+  try {
+    // Récupérer l'auteur du post
+    const [post] = await promisePool.query(
+      'SELECT user_id FROM posts WHERE id = ?',
+      [postId]
+    );
+    
+    if (post.length === 0) {
+      return res.status(404).json({ message: 'Post non trouvé' });
+    }
+    
+    const [result] = await promisePool.query(
+      'INSERT INTO comments (post_id, user_id, content) VALUES (?, ?, ?)',
+      [postId, userId, content]
+    );
+    
+    // Créer une notification pour l'auteur du post (sauf si c'est lui-même)
+    if (post[0].user_id !== userId) {
+      await createNotification(post[0].user_id, userId, 'comment', result.insertId, 'comment');
+    }
+    
+    const [newComment] = await promisePool.query(
+      `SELECT c.*, u.username 
+       FROM comments c
+       JOIN users u ON c.user_id = u.id
+       WHERE c.id = ?`,
+      [result.insertId]
+    );
+    
+    res.status(201).json(newComment[0]);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+// Ajouter une réaction à un commentaire
+app.post('/api/comments/:commentId/reactions', authenticateToken, async (req, res) => {
+  const { commentId } = req.params;
+  const userId = req.user.id;
+  const { type } = req.body;
+  
+  try {
+    // Récupérer l'auteur du commentaire
+    const [comment] = await promisePool.query(
+      'SELECT c.user_id, p.user_id as post_author_id FROM comments c JOIN posts p ON c.post_id = p.id WHERE c.id = ?',
+      [commentId]
+    );
+    
+    if (comment.length === 0) {
+      return res.status(404).json({ message: 'Commentaire non trouvé' });
+    }
+    
+    const [existing] = await promisePool.query(
+      'SELECT * FROM comment_reactions WHERE comment_id = ? AND user_id = ?',
+      [commentId, userId]
+    );
+    
+    if (existing.length > 0) {
+      await promisePool.query(
+        'DELETE FROM comment_reactions WHERE comment_id = ? AND user_id = ?',
+        [commentId, userId]
+      );
+    }
+    
+    await promisePool.query(
+      'INSERT INTO comment_reactions (comment_id, user_id, reaction_type) VALUES (?, ?, ?)',
+      [commentId, userId, type]
+    );
+    
+    // Créer une notification pour l'auteur du commentaire
+    if (comment[0].user_id !== userId) {
+      await createNotification(comment[0].user_id, userId, 'comment_reaction', commentId, 'comment');
+    }
+    
+    const [countResult] = await promisePool.query(
+      'SELECT COUNT(*) as count FROM comment_reactions WHERE comment_id = ?',
+      [commentId]
+    );
+    
+    res.json({ success: true, count: countResult[0].count, reaction: type });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+
+  // Route de test pour vérifier les notifications (à supprimer plus tard)
+app.get('/api/debug/notifications', authenticateToken, async (req, res) => {
+  const userId = req.user.id;
+  
+  try {
+    const [notifications] = await promisePool.query(
+      'SELECT * FROM notifications WHERE user_id = ?',
+      [userId]
+    );
+    
+    res.json({ 
+      currentUserId: userId,
+      notificationsCount: notifications.length,
+      notifications 
+    });
+  } catch (error) {
+    res.json({ error: error.message });
+  }
+});
+
+
+// Route de test pour créer une notification pour l'utilisateur courant
+app.post('/api/debug/create-notification', authenticateToken, async (req, res) => {
+  const userId = req.user.id;
+  const { type = 'test' } = req.body;
+  
+  try {
+    await promisePool.query(
+      'INSERT INTO notifications (user_id, actor_id, type, is_read, created_at) VALUES (?, ?, ?, 0, NOW())',
+      [userId, userId, type]
+    );
+    
+    res.json({ success: true, message: `Notification créée pour l'utilisateur ${userId}` });
+  } catch (error) {
+    res.json({ error: error.message });
+  }
+});
+
+// ========== ROUTES MESSAGES ==========
+
+// Récupérer les messages entre deux utilisateurs
+app.get('/api/messages/:userId', authenticateToken, async (req, res) => {
+  const { userId } = req.params;
+  const currentUserId = req.user.id;
+  
+  try {
+    const [messages] = await promisePool.query(
+      `SELECT m.*, 
+        u1.username as sender_username,
+        u2.username as receiver_username
+       FROM private_messages m
+       JOIN users u1 ON m.sender_id = u1.id
+       JOIN users u2 ON m.receiver_id = u2.id
+       WHERE (m.sender_id = ? AND m.receiver_id = ?)
+          OR (m.sender_id = ? AND m.receiver_id = ?)
+       ORDER BY m.created_at ASC`,
+      [currentUserId, userId, userId, currentUserId]
+    );
+    
+    // Marquer les messages comme lus
+    await promisePool.query(
+      'UPDATE private_messages SET is_read = 1 WHERE receiver_id = ? AND sender_id = ? AND is_read = 0',
+      [currentUserId, userId]
+    );
+    
+    res.json(messages);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+// Envoyer un message
+// Envoyer un message
+app.post('/api/messages', authenticateToken, async (req, res) => {
+  const { receiverId, content } = req.body;
+  const senderId = req.user.id;
+  
+  // Vérifier que l'utilisateur ne s'envoie pas un message à lui-même
+  if (senderId === receiverId) {
+    return res.status(400).json({ message: 'Vous ne pouvez pas vous envoyer un message à vous-même' });
+  }
+  
+  if (!receiverId || !content || !content.trim()) {
+    return res.status(400).json({ message: 'Destinataire et contenu requis' });
+  }
+  
+  try {
+    const [result] = await promisePool.query(
+      'INSERT INTO private_messages (sender_id, receiver_id, content) VALUES (?, ?, ?)',
+      [senderId, receiverId, content.trim()]
+    );
+    
+    const [newMessage] = await promisePool.query(
+      `SELECT m.*, 
+        u1.username as sender_username,
+        u2.username as receiver_username
+       FROM private_messages m
+       JOIN users u1 ON m.sender_id = u1.id
+       JOIN users u2 ON m.receiver_id = u2.id
+       WHERE m.id = ?`,
+      [result.insertId]
+    );
+
+    // Envoyer uniquement au destinataire
+    io.to(`user_${receiverId}`).emit('newPrivateMessage', newMessage[0]);
+
+    // Créer une notification pour le destinataire seulement
+    // La fonction createNotification vérifie déjà si senderId === receiverId
+    await createNotification(receiverId, senderId, 'private_message', result.insertId, 'message');
+
+    // Mettre à jour le compteur de messages non lus du destinataire
+    const [unreadCount] = await promisePool.query(
+      'SELECT COUNT(*) as count FROM private_messages WHERE receiver_id = ? AND is_read = 0',
+      [receiverId]
+    );
+    io.to(`user_${receiverId}`).emit('unreadMessagesCount', { unreadCount: unreadCount[0].count });
+    
+    res.status(201).json(newMessage[0]);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+// Route de test pour envoyer une notification manuelle
+app.post('/api/test/notification', authenticateToken, async (req, res) => {
+  const { userId, type } = req.body;
+  const actorId = req.user.id;
+  
+  try {
+    const [result] = await promisePool.query(
+      'INSERT INTO notifications (user_id, actor_id, type, is_read, created_at) VALUES (?, ?, ?, 0, NOW())',
+      [userId, actorId, type || 'test']
+    );
+    
+    const [notification] = await promisePool.query(
+      `SELECT n.*, u.username 
+       FROM notifications n
+       JOIN users u ON n.actor_id = u.id
+       WHERE n.id = ?`,
+      [result.insertId]
+    );
+    
+    if (notification.length > 0) {
+      io.to(`user_${userId}`).emit('newNotification', notification[0]);
+      
+      const [countResult] = await promisePool.query(
+        'SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND is_read = 0',
+        [userId]
+      );
+      
+      io.to(`user_${userId}`).emit('notificationUpdate', { 
+        unreadCount: countResult[0].count 
+      });
+    }
+    
+    res.json({ success: true, notification: notification[0] });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
   }
 });
 
