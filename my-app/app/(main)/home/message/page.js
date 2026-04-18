@@ -74,7 +74,7 @@ export default function MessagePage() {
   if (error) {
     return (
       <div className="text-center py-10">
-        <div className="text-red-500 mb-2">⚠️ Erreur de connexion</div>
+        <div className="text-red-500 mb-2">Erreur de connexion</div>
         <div className="text-sm text-gray-500">Vérifiez que le backend est démarré sur http://localhost:5000</div>
         <button 
           onClick={() => fetchFriends()} 

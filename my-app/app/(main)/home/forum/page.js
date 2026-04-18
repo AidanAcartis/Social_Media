@@ -89,7 +89,7 @@ export default function ForumPage() {
           </div>
         </div>
 
-        <div className="h-[500px] overflow-y-auto p-5 bg-gray-50/50 flex flex-col">
+        <div className="h-125 overflow-y-auto p-5 bg-gray-50/50 flex flex-col">
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center flex-1 text-gray-300">
               <svg className="w-12 h-12 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -124,7 +124,7 @@ export default function ForumPage() {
                         </span>
                       </div>
                       <div
-                        className={`px-3.5 py-2 text-sm leading-relaxed break-words ${
+                        className={`px-3.5 py-2 text-sm leading-relaxed wrap-break-words ${
                           isOwn
                             ? 'bg-gray-900 text-white rounded-2xl rounded-br-sm'
                             : 'bg-white text-gray-800 border border-gray-100 rounded-2xl rounded-bl-sm'

@@ -41,7 +41,7 @@ export default function NavigationCard() {
           </svg>
           <span className="flex-1">{label}</span>
           {label === 'Notifications' && unreadCount > 0 && (
-            <span className="bg-red-500 text-white text-[10px] font-semibold rounded-full px-1.5 py-0.5 leading-none min-w-[18px] text-center">
+            <span className="bg-red-500 text-white text-[10px] font-semibold rounded-full px-1.5 py-0.5 leading-none min-w-4.5 text-center">
               {unreadCount > 99 ? '99+' : unreadCount}
             </span>
           )}

@@ -89,7 +89,7 @@ export default function CommentsPage() {
       credentials: 'include'
     })
     if (response.ok) {
-      // ✅ Filtre les commentaires pour retirer celui supprimé
+      // Filtre les commentaires pour retirer celui supprimé
       setComments(prevComments => prevComments.filter(c => c.id !== commentId))
     }
   } catch (error) {

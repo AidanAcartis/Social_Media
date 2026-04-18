@@ -15,7 +15,7 @@ const getNotifications = async (req, res) => {
       [userId]
     );
     
-    console.log(`📬 ${notifications.length} notifications trouvées pour l'utilisateur ${userId}`);
+    console.log(`${notifications.length} notifications trouvées pour l'utilisateur ${userId}`);
     res.json(notifications);
   } catch (error) {
     console.error(error);
@@ -32,7 +32,7 @@ const getUnreadCount = async (req, res) => {
       [userId]
     );
     
-    console.log(`🔔 ${result[0].count} notifications non lues pour l'utilisateur ${userId}`);
+    console.log(`${result[0].count} notifications non lues pour l'utilisateur ${userId}`);
     res.json({ count: result[0].count });
   } catch (error) {
     console.error(error);
@@ -50,7 +50,7 @@ const markAllAsRead = async (req, res) => {
       [userId]
     );
     
-    console.log(`✅ ${result.affectedRows} notifications marquées comme lues pour l'utilisateur ${userId}`);
+    console.log(`${result.affectedRows} notifications marquées comme lues pour l'utilisateur ${userId}`);
     
     res.json({ message: 'Notifications marquées comme lues', count: result.affectedRows });
   } catch (error) {

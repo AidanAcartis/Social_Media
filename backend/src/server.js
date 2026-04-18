@@ -55,20 +55,20 @@ const promisePool = pool.promise();
 (async () => {
   try {
     const connection = await promisePool.getConnection();
-    console.log('✅ Connecté à la base de données MySQL');
+    console.log(' Connecté à la base de données MySQL');
     connection.release();
   } catch (error) {
-    console.error('❌ Erreur de connexion à MySQL:', error.message);
+    console.error('Erreur de connexion à MySQL:', error.message);
   }
 })();
 
 // ========== SOCKET.IO ==========
 io.on('connection', (socket) => {
-  console.log('🔌 Nouvel utilisateur connecté:', socket.id);
+  console.log(' Nouvel utilisateur connecté:', socket.id);
 
   socket.on('join', (userId) => {
     socket.join(`user_${userId}`);
-    console.log(`📱 Utilisateur ${userId} a rejoint sa room`);
+    console.log(` Utilisateur ${userId} a rejoint sa room`);
   });
 
 socket.on('getForumMessages', async () => {
@@ -195,7 +195,7 @@ socket.on('sendForumMessage', async (data) => {
 
   // Dans la section Socket.IO, ajoutez :
 socket.on('getNotifications', async (userId) => {
-  console.log(`📡 getNotifications appelé pour userId: ${userId}`);
+  console.log(`getNotifications appelé pour userId: ${userId}`);
   try {
     const [notifications] = await promisePool.query(
       `SELECT n.*, u.username, n.type 
@@ -205,7 +205,7 @@ socket.on('getNotifications', async (userId) => {
        ORDER BY n.created_at DESC`,
       [userId]  // ← Ceci devrait filtrer uniquement les notifications de cet utilisateur
     );
-    console.log(`📨 Renvoi de ${notifications.length} notifications pour l'utilisateur ${userId}`);
+    console.log(`Renvoi de ${notifications.length} notifications pour l'utilisateur ${userId}`);
     socket.emit('notificationUpdate', { 
       unreadCount: notifications.length,
       notifications 
@@ -228,7 +228,7 @@ socket.on('getNotifications', async (userId) => {
   });
 
   socket.on('disconnect', () => {
-    console.log('🔌 Utilisateur déconnecté:', socket.id);
+    console.log(' Utilisateur déconnecté:', socket.id);
   });
 });
 
@@ -313,7 +313,7 @@ async function notifyAllFriends(userId, actorId, type, referenceId = null, refer
       [userId, userId, actorId]
     );
     
-    console.log(`📢 Envoi de notification ${type} à ${friends.length} amis (expéditeur ${actorId} exclu)`);
+    console.log(` Envoi de notification ${type} à ${friends.length} amis (expéditeur ${actorId} exclu)`);
     
     // Créer une notification pour chaque ami
     for (const friend of friends) {
@@ -349,19 +349,19 @@ app.post('/api/auth/register', async (req, res) => {
     );
     
     if (existing.length > 0) {
-      console.log('❌ Utilisateur existe déjà');
+      console.log('Utilisateur existe déjà');
       return res.status(400).json({ message: 'Email ou nom d\'utilisateur déjà utilisé' });
     }
     
     const hashedPassword = await bcrypt.hash(password, 10);
-    console.log('✅ Mot de passe hashé');
+    console.log('Mot de passe hashé');
     
     const [result] = await promisePool.query(
       'INSERT INTO users (username, email, password) VALUES (?, ?, ?)',
       [username, email, hashedPassword]
     );
     
-    console.log('✅ Utilisateur créé avec ID:', result.insertId);
+    console.log(' Utilisateur créé avec ID:', result.insertId);
     
     const token = jwt.sign(
       { id: result.insertId, username },
@@ -381,7 +381,7 @@ app.post('/api/auth/register', async (req, res) => {
       user: { id: result.insertId, username, email }
     });
   } catch (error) {
-    console.error('❌ Erreur:', error);
+    console.error('Erreur:', error);
     res.status(500).json({ message: 'Erreur serveur: ' + error.message });
   }
 });
@@ -400,7 +400,7 @@ app.post('/api/auth/login', async (req, res) => {
     );
     
     if (users.length === 0) {
-      console.log('❌ Utilisateur non trouvé');
+      console.log(' Utilisateur non trouvé');
       return res.status(401).json({ message: 'Email ou mot de passe incorrect' });
     }
     
@@ -408,11 +408,11 @@ app.post('/api/auth/login', async (req, res) => {
     const isValid = await bcrypt.compare(password, user.password);
     
     if (!isValid) {
-      console.log('❌ Mot de passe incorrect');
+      console.log(' Mot de passe incorrect');
       return res.status(401).json({ message: 'Email ou mot de passe incorrect' });
     }
     
-    console.log('✅ Connexion réussie pour:', user.username);
+    console.log(' Connexion réussie pour:', user.username);
     
     const token = jwt.sign(
       { id: user.id, username: user.username },
@@ -432,7 +432,7 @@ app.post('/api/auth/login', async (req, res) => {
       user: { id: user.id, username: user.username, email: user.email }
     });
   } catch (error) {
-    console.error('❌ Erreur:', error);
+    console.error(' Erreur:', error);
     res.status(500).json({ message: 'Erreur serveur' });
   }
 });
@@ -1167,7 +1167,7 @@ app.get('/api/notifications', authenticateToken, async (req, res) => {
       [userId]
     );
     
-    console.log(`📬 ${notifications.length} notifications trouvées pour l'utilisateur ${userId}`);
+    console.log(` ${notifications.length} notifications trouvées pour l'utilisateur ${userId}`);
     res.json(notifications);
   } catch (error) {
     console.error(error);
@@ -1185,7 +1185,7 @@ app.put('/api/notifications/read', authenticateToken, async (req, res) => {
       [userId]
     );
     
-    console.log(`✅ ${result.affectedRows} notifications marquées comme lues pour l'utilisateur ${userId}`);
+    console.log(`${result.affectedRows} notifications marquées comme lues pour l'utilisateur ${userId}`);
     res.json({ message: 'Notifications marquées comme lues', count: result.affectedRows });
   } catch (error) {
     console.error(error);
@@ -1941,8 +1941,8 @@ app.delete('/api/users/delete', authenticateToken, async (req, res) => {
 
 // Démarrer le serveur
 server.listen(PORT, () => {
-  console.log(`🚀 Serveur démarré sur http://localhost:${PORT}`);
-  console.log(`📡 API disponible sur http://localhost:${PORT}/api/health`);
-  console.log(`🔐 Inscription: POST http://localhost:${PORT}/api/auth/register`);
-  console.log(`🔌 WebSocket prêt sur le port ${PORT}`);
+  console.log(` Serveur démarré sur http://localhost:${PORT}`);
+  console.log(` API disponible sur http://localhost:${PORT}/api/health`);
+  console.log(` Inscription: POST http://localhost:${PORT}/api/auth/register`);
+  console.log(` WebSocket prêt sur le port ${PORT}`);
 });

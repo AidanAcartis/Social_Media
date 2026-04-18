@@ -65,7 +65,7 @@ export default function ForumChat() {
   }
 
   return (
-    <div className="flex flex-col h-[500px]">
+    <div className="flex flex-col h-125">
       <div className="flex-1 overflow-y-auto space-y-4 p-4 bg-gray-50 rounded-lg">
         {messages.length === 0 ? (
           <div className="text-center text-gray-500 py-10">
@@ -95,7 +95,7 @@ export default function ForumChat() {
                   <p className={`text-sm font-semibold ${isOwn ? 'text-blue-100' : 'text-gray-600'}`}>
                     {isOwn ? 'Moi' : msg.username || `Utilisateur ${senderId}`}
                   </p>
-                  <p className="break-words">{msg.content}</p>
+                  <p className="wrap-break-words">{msg.content}</p>
                   <p className={`text-xs mt-1 ${isOwn ? 'text-blue-200' : 'text-gray-400'}`}>
                     {new Date(msg.created_at).toLocaleTimeString()}
                   </p>
