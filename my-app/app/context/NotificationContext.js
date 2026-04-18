@@ -31,19 +31,24 @@ export function NotificationProvider({ children }) {
         socket.emit('getNotifications', user.id)
       })
 
-      socket.on('notificationUpdate', (data) => {
-        console.log('Notification update reçue:', data)
-        setUnreadCount(data.unreadCount || 0)
-        if (data.notifications) {
-          setNotifications(data.notifications)
-        }
-      })
-
       socket.on('newNotification', (notification) => {
-        console.log('🔔 Nouvelle notification reçue:', notification)
+        // IGNORER TOUTES LES NOTIFICATIONS QUI NE SONT PAS POUR L'UTILISATEUR CONNECTÉ
+        if (notification.user_id !== user.id) {
+            return;
+        }
+        
         setNotifications(prev => [notification, ...prev])
         setUnreadCount(prev => prev + 1)
-      })
+        })
+
+        socket.on('notificationUpdate', (data) => {
+        // Ne mettre à jour que si c'est pour l'utilisateur connecté
+        setUnreadCount(data.unreadCount || 0);
+        if (data.notifications) {
+            const userNotifications = data.notifications.filter(n => n.user_id === user.id);
+            setNotifications(userNotifications);
+        }
+        })
 
       socket.on('disconnect', () => {
         console.log('Socket.IO déconnecté')

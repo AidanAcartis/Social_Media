@@ -195,6 +195,7 @@ socket.on('sendForumMessage', async (data) => {
 
   // Dans la section Socket.IO, ajoutez :
 socket.on('getNotifications', async (userId) => {
+  console.log(`📡 getNotifications appelé pour userId: ${userId}`);
   try {
     const [notifications] = await promisePool.query(
       `SELECT n.*, u.username, n.type 
@@ -202,8 +203,9 @@ socket.on('getNotifications', async (userId) => {
        JOIN users u ON n.actor_id = u.id
        WHERE n.user_id = ? AND n.is_read = 0
        ORDER BY n.created_at DESC`,
-      [userId]
+      [userId]  // ← Ceci devrait filtrer uniquement les notifications de cet utilisateur
     );
+    console.log(`📨 Renvoi de ${notifications.length} notifications pour l'utilisateur ${userId}`);
     socket.emit('notificationUpdate', { 
       unreadCount: notifications.length,
       notifications 
@@ -237,17 +239,19 @@ socket.on('getNotifications', async (userId) => {
 
 // Créer une notification générique
 async function createNotification(userId, actorId, type, referenceId = null, referenceType = null) {
-  // 🔴 SOLUTION: Ne pas créer de notification si l'utilisateur s'auto-notifie
+  // Ignorer si c'est une auto-notification
   if (userId === actorId) {
-    console.log(`⏭️ Notification ignorée (auto-notification): user=${userId} ne peut pas recevoir sa propre notification`);
     return null;
   }
+  
+  // IGNORER LES NOTIFICATIONS POUR L'EXPÉDITEUR
+  // Ne créer une notification que si l'utilisateur est différent de l'acteur
+  // Déjà fait ci-dessus
   
   try {
     let query = 'INSERT INTO notifications (user_id, actor_id, type, is_read, created_at) VALUES (?, ?, ?, 0, NOW())';
     let params = [userId, actorId, type];
     
-    // Ajouter les références selon le type
     if (referenceType === 'post') {
       query = 'INSERT INTO notifications (user_id, actor_id, type, post_id, is_read, created_at) VALUES (?, ?, ?, ?, 0, NOW())';
       params = [userId, actorId, type, referenceId];
@@ -264,7 +268,6 @@ async function createNotification(userId, actorId, type, referenceId = null, ref
     
     const [result] = await promisePool.query(query, params);
     
-    // Récupérer la notification créée
     const [notification] = await promisePool.query(
       `SELECT n.*, u.username 
        FROM notifications n
@@ -273,9 +276,8 @@ async function createNotification(userId, actorId, type, referenceId = null, ref
       [result.insertId]
     );
     
-    // Émettre via Socket.IO uniquement si la notification existe
     if (notification.length > 0) {
-      console.log(`🔔 Notification envoyée à user_${userId}: ${type} de ${notification[0].username}`);
+      // Envoyer UNIQUEMENT au destinataire (userId)
       io.to(`user_${userId}`).emit('newNotification', notification[0]);
       
       const [countResult] = await promisePool.query(
@@ -296,26 +298,30 @@ async function createNotification(userId, actorId, type, referenceId = null, ref
 }
 
 // Notifier tous les amis d'un utilisateur (sauf l'expéditeur)
+// Notifier tous les amis d'un utilisateur (sauf l'expéditeur)
 async function notifyAllFriends(userId, actorId, type, referenceId = null, referenceType = null) {
   try {
-    // Récupérer tous les amis de l'utilisateur
+    // Récupérer tous les amis de l'utilisateur (sauf l'expéditeur)
     const [friends] = await promisePool.query(
       `SELECT u.id 
        FROM followers f
        JOIN users u ON (u.id = f.follower_id OR u.id = f.followed_id)
        WHERE (f.follower_id = ? OR f.followed_id = ?)
          AND f.status = 'accepted'
-         AND u.id != ?
+         AND u.id != ?  // Exclure l'expéditeur
        GROUP BY u.id`,
       [userId, userId, actorId]
     );
     
+    console.log(`📢 Envoi de notification ${type} à ${friends.length} amis (expéditeur ${actorId} exclu)`);
+    
     // Créer une notification pour chaque ami
     for (const friend of friends) {
-      await createNotification(friend.id, actorId, type, referenceId, referenceType);
+      // Vérification supplémentaire pour éviter d'envoyer à l'expéditeur
+      if (friend.id !== actorId) {
+        await createNotification(friend.id, actorId, type, referenceId, referenceType);
+      }
     }
-    
-    console.log(`📢 Notification ${type} envoyée à ${friends.length} amis`);
   } catch (error) {
     console.error('Erreur notification amis:', error);
   }
