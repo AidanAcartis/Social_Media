@@ -32,6 +32,11 @@ app.use(cors({
 app.use(express.json());
 app.use(cookieParser());
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+// Ajoutez ceci avant les routes pour voir quels fichiers sont demandés
+// app.use('/uploads', (req, res, next) => {
+//   console.log('Static file requested:', req.path);
+//   next();
+// }, express.static(path.join(__dirname, '../uploads')));
 
 // Connexion à MySQL
 const pool = mysql.createPool({
@@ -66,44 +71,45 @@ io.on('connection', (socket) => {
     console.log(`📱 Utilisateur ${userId} a rejoint sa room`);
   });
 
-  socket.on('getForumMessages', async () => {
-    try {
-      const [messages] = await promisePool.query(
-        `SELECT fm.*, u.username 
-         FROM forum_messages fm
-         JOIN users u ON fm.sender_id = u.id
-         ORDER BY fm.created_at ASC
-         LIMIT 100`
-      );
-      socket.emit('forumMessages', messages);
-    } catch (error) {
-      console.error('Erreur getForumMessages:', error);
-      socket.emit('forumMessages', []);
-    }
-  });
+socket.on('getForumMessages', async () => {
+  try {
+    const [messages] = await promisePool.query(
+      `SELECT fm.*, u.username, u.id as user_id
+       FROM forum_messages fm
+       JOIN users u ON fm.sender_id = u.id
+       ORDER BY fm.created_at ASC
+       LIMIT 100`
+    );
+    socket.emit('forumMessages', messages);
+  } catch (error) {
+    console.error('Erreur getForumMessages:', error);
+    socket.emit('forumMessages', []);
+  }
+});
 
   socket.on('sendForumMessage', async (data) => {
-    const { senderId, username, content } = data;
+  const { senderId, username, content } = data;
+  
+  try {
+    const [result] = await promisePool.query(
+      'INSERT INTO forum_messages (sender_id, content) VALUES (?, ?)',
+      [senderId, content]
+    );
     
-    try {
-      const [result] = await promisePool.query(
-        'INSERT INTO forum_messages (sender_id, content) VALUES (?, ?)',
-        [senderId, content]
-      );
-      
-      const newMessage = {
-        id: result.insertId,
-        sender_id: senderId,
-        content: content,
-        username: username,
-        created_at: new Date()
-      };
-      
-      io.emit('newForumMessage', newMessage);
-    } catch (error) {
-      console.error('Erreur sendForumMessage:', error);
-    }
-  });
+    const newMessage = {
+      id: result.insertId,
+      sender_id: senderId,
+      user_id: senderId,  // Ajoutez cette ligne
+      content: content,
+      username: username,
+      created_at: new Date()
+    };
+    
+    io.emit('newForumMessage', newMessage);
+  } catch (error) {
+    console.error('Erreur sendForumMessage:', error);
+  }
+});
 
   socket.on('getMessages', async (data) => {
     const { senderId, receiverId } = data;
@@ -139,6 +145,26 @@ io.on('connection', (socket) => {
       console.error('Erreur getMessages:', error);
     }
   });
+
+  // Dans la section Socket.IO, ajoutez :
+socket.on('getNotifications', async (userId) => {
+  try {
+    const [notifications] = await promisePool.query(
+      `SELECT n.*, u.username, n.type 
+       FROM notifications n
+       JOIN users u ON n.actor_id = u.id
+       WHERE n.user_id = ? AND n.is_read = 0
+       ORDER BY n.created_at DESC`,
+      [userId]
+    );
+    socket.emit('notificationUpdate', { 
+      unreadCount: notifications.length,
+      notifications 
+    });
+  } catch (error) {
+    console.error('Erreur getNotifications:', error);
+  }
+});
 
   socket.on('sendPrivateMessage', async (data) => {
     const { senderId, receiverId, content } = data;
@@ -445,6 +471,7 @@ app.get('/api/debug/cover/:userId', async (req, res) => {
 // ========== ROUTES POUR LES POSTS ==========
 
 // Créer un post
+// Créer un post
 app.post('/api/posts', authenticateToken, upload.single('image'), async (req, res) => {
   console.log('=== CREATE POST ===');
   
@@ -452,10 +479,16 @@ app.post('/api/posts', authenticateToken, upload.single('image'), async (req, re
   const content = req.body.content || '';
   const imagePath = req.file ? `/uploads/posts/${req.file.filename}` : null;
   
+  // Détecter le type de fichier
+  let docType = null;
+  if (imagePath) {
+    docType = detectFileType(imagePath);
+  }
+  
   try {
     const [result] = await promisePool.query(
-      'INSERT INTO posts (user_id, content, image, created_at) VALUES (?, ?, ?, NOW())',
-      [userId, content, imagePath]
+      'INSERT INTO posts (user_id, content, image, doc_type, created_at) VALUES (?, ?, ?, ?, NOW())',
+      [userId, content, imagePath, docType]
     );
     
     // Récupérer le post créé avec les infos utilisateur
@@ -471,6 +504,7 @@ app.post('/api/posts', authenticateToken, upload.single('image'), async (req, re
       id: newPost[0].id,
       content: newPost[0].content,
       image: newPost[0].image,
+      doc_type: newPost[0].doc_type,
       createdAt: newPost[0].created_at,
       reactionCount: 0,
       commentCount: 0,
@@ -612,6 +646,378 @@ app.delete('/api/posts/:postId', authenticateToken, async (req, res) => {
     res.status(500).json({ message: 'Erreur serveur' });
   }
 });
+
+// ========== ROUTES ABOUT ==========
+
+// Récupérer les descriptions
+app.get('/api/about', async (req, res) => {
+  try {
+    const [data] = await promisePool.query('SELECT * FROM about');
+    res.json({ status: 'success', data });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ status: 'error', message: 'Erreur serveur' });
+  }
+});
+
+// Mettre à jour une description
+app.post('/api/about', authenticateToken, async (req, res) => {
+  const { user_id, description } = req.body;
+  
+  if (!user_id || !description) {
+    return res.status(400).json({ status: 'error', message: 'user_id et description requis' });
+  }
+  
+  try {
+    const [existing] = await promisePool.query(
+      'SELECT * FROM about WHERE user_id = ?',
+      [user_id]
+    );
+    
+    if (existing.length > 0) {
+      await promisePool.query(
+        'UPDATE about SET description = ? WHERE user_id = ?',
+        [description, user_id]
+      );
+      res.json({ status: 'success', message: 'Description mise à jour' });
+    } else {
+      await promisePool.query(
+        'INSERT INTO about (user_id, description) VALUES (?, ?)',
+        [user_id, description]
+      );
+      res.json({ status: 'success', message: 'Description ajoutée' });
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ status: 'error', message: 'Erreur serveur' });
+  }
+});
+
+// ========== ROUTES LOCATION ==========
+
+// Récupérer les localisations
+app.get('/api/location', async (req, res) => {
+  try {
+    const [data] = await promisePool.query('SELECT * FROM location');
+    res.json({ status: 'success', data });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ status: 'error', message: 'Erreur serveur' });
+  }
+});
+
+// Mettre à jour une localisation
+app.post('/api/location', authenticateToken, async (req, res) => {
+  const { user_id, country, city } = req.body;
+  
+  if (!user_id || !country || !city) {
+    return res.status(400).json({ status: 'error', message: 'Tous les champs sont requis' });
+  }
+  
+  try {
+    const [existing] = await promisePool.query(
+      'SELECT * FROM location WHERE user_id = ?',
+      [user_id]
+    );
+    
+    if (existing.length > 0) {
+      await promisePool.query(
+        'UPDATE location SET country = ?, city = ? WHERE user_id = ?',
+        [country, city, user_id]
+      );
+      res.json({ status: 'success', message: 'Localisation mise à jour' });
+    } else {
+      await promisePool.query(
+        'INSERT INTO location (user_id, country, city) VALUES (?, ?, ?)',
+        [user_id, country, city]
+      );
+      res.json({ status: 'success', message: 'Localisation ajoutée' });
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ status: 'error', message: 'Erreur serveur' });
+  }
+});
+
+// ========== ROUTE POUR RÉCUPÉRER LES FICHIERS D'UN UTILISATEUR ==========
+// Fonction helper à ajouter au début du fichier
+function detectFileTypeFromUrl(filePath) {
+  if (!filePath) return null;
+  
+  const extension = filePath.split('.').pop().toLowerCase();
+  
+  const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'];
+  const videoExtensions = ['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv'];
+  const documentExtensions = ['pdf', 'doc', 'docx', 'txt', 'xls', 'xlsx', 'ppt', 'pptx'];
+  
+  if (imageExtensions.includes(extension)) {
+    return 'photo';
+  } else if (videoExtensions.includes(extension)) {
+    return 'video';
+  } else if (documentExtensions.includes(extension)) {
+    return 'pdf';
+  }
+  
+  return 'other';
+}
+
+// Modifiez la route GET /api/users/:userId/files
+app.get('/api/users/:userId/files', authenticateToken, async (req, res) => {
+  const { userId } = req.params;
+  
+  try {
+    const [files] = await promisePool.query(
+      `SELECT p.id, p.content, p.image as doc_url, p.doc_type, p.created_at,
+              p.user_id, u.username
+       FROM posts p
+       JOIN users u ON p.user_id = u.id
+       WHERE p.user_id = ? 
+         AND p.image IS NOT NULL
+       ORDER BY p.created_at DESC`,
+      [userId]
+    );
+    
+    const formattedFiles = files.map(file => ({
+      id: file.id,
+      doc_url: file.doc_url,
+      doc_type: file.doc_type || detectFileTypeFromUrl(file.doc_url),
+      content: file.content,
+      created_at: file.created_at,
+      user_id: file.user_id,
+      username: file.username
+    }));
+    
+    res.json(formattedFiles);
+  } catch (error) {
+    console.error('Error fetching user files:', error);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+// Fonction helper pour détecter le type de fichier
+function detectFileType(filePath) {
+  if (!filePath) return null;
+  
+  const extension = filePath.split('.').pop().toLowerCase();
+  
+  if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(extension)) {
+    return 'photo';
+  } else if (['mp4', 'webm', 'ogg', 'mov', 'avi'].includes(extension)) {
+    return 'video';
+  } else if (['pdf', 'doc', 'docx', 'txt', 'xls', 'xlsx'].includes(extension)) {
+    return 'pdf';
+  }
+  
+  return 'other';
+}
+
+// ========== ROUTES POUR LES AMIS (FOLLOWERS) ==========
+
+// Récupérer les amis
+app.get('/api/friends', authenticateToken, async (req, res) => {
+  const userId = req.user.id;
+  
+  try {
+    const [friends] = await promisePool.query(
+      `SELECT u.id, u.username, u.email, f.status
+       FROM followers f
+       JOIN users u ON (u.id = f.follower_id OR u.id = f.followed_id)
+       WHERE (f.follower_id = ? OR f.followed_id = ?)
+         AND f.status = 'accepted'
+         AND u.id != ?
+       GROUP BY u.id`,
+      [userId, userId, userId]
+    );
+    
+    res.json({ status: 'success', data: friends });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ status: 'error', message: 'Erreur serveur' });
+  }
+});
+
+// Récupérer les demandes en attente
+app.get('/api/friends/pending', authenticateToken, async (req, res) => {
+  const userId = req.user.id;
+  
+  try {
+    const [requests] = await promisePool.query(
+      `SELECT f.id as request_id, f.created_at, u.id, u.username, u.email
+       FROM followers f
+       JOIN users u ON f.follower_id = u.id
+       WHERE f.followed_id = ? AND f.status = 'pending'
+       ORDER BY f.created_at DESC`,
+      [userId]
+    );
+    
+    res.json(requests);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ status: 'error', message: 'Erreur serveur' });
+  }
+});
+
+// Envoyer une demande d'ami
+app.post('/api/friends/request', authenticateToken, async (req, res) => {
+  const { followed_id } = req.body;
+  const follower_id = req.user.id;
+  
+  if (follower_id === followed_id) {
+    return res.status(400).json({ status: 'error', message: 'Vous ne pouvez pas vous ajouter vous-même' });
+  }
+  
+  try {
+    const [existing] = await promisePool.query(
+      `SELECT * FROM followers 
+       WHERE (follower_id = ? AND followed_id = ?) 
+       OR (follower_id = ? AND followed_id = ?)`,
+      [follower_id, followed_id, followed_id, follower_id]
+    );
+    
+    if (existing.length > 0) {
+      if (existing[0].status === 'pending') {
+        return res.status(400).json({ status: 'error', message: 'Demande déjà envoyée' });
+      } else if (existing[0].status === 'accepted') {
+        return res.status(400).json({ status: 'error', message: 'Vous êtes déjà amis' });
+      }
+    }
+    
+    await promisePool.query(
+      'INSERT INTO followers (follower_id, followed_id, status) VALUES (?, ?, "pending")',
+      [follower_id, followed_id]
+    );
+    
+    // Créer une notification
+    await promisePool.query(
+      'INSERT INTO notifications (user_id, actor_id, type, is_read) VALUES (?, ?, "friend_request", 0)',
+      [followed_id, follower_id]
+    );
+    
+    res.json({ status: 'success', message: 'Demande d\'ami envoyée' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ status: 'error', message: 'Erreur serveur' });
+  }
+});
+
+// Accepter une demande d'ami
+app.post('/api/friends/accept', authenticateToken, async (req, res) => {
+  const { request_id } = req.body;
+  const userId = req.user.id;
+  
+  try {
+    await promisePool.query(
+      'UPDATE followers SET status = "accepted" WHERE id = ? AND followed_id = ? AND status = "pending"',
+      [request_id, userId]
+    );
+    
+    res.json({ status: 'success', message: 'Demande acceptée' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ status: 'error', message: 'Erreur serveur' });
+  }
+});
+
+// Refuser une demande d'ami
+app.post('/api/friends/reject', authenticateToken, async (req, res) => {
+  const { request_id } = req.body;
+  const userId = req.user.id;
+  
+  try {
+    await promisePool.query(
+      'DELETE FROM followers WHERE id = ? AND followed_id = ? AND status = "pending"',
+      [request_id, userId]
+    );
+    
+    res.json({ status: 'success', message: 'Demande refusée' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ status: 'error', message: 'Erreur serveur' });
+  }
+});
+
+// Vérifier le statut de la relation
+app.get('/api/friends/check', authenticateToken, async (req, res) => {
+  const { userId } = req.query;
+  const currentUserId = req.user.id;
+  
+  if (!userId || currentUserId === parseInt(userId)) {
+    return res.json({ status: 'self', isFollowing: false });
+  }
+  
+  try {
+    const [result] = await promisePool.query(
+      `SELECT status FROM followers 
+       WHERE (follower_id = ? AND followed_id = ?)
+       LIMIT 1`,
+      [currentUserId, userId]
+    );
+    
+    if (result.length === 0) {
+      return res.json({ status: 'none', isFollowing: false });
+    }
+    
+    res.json({ 
+      status: result[0].status,
+      isFollowing: result[0].status === 'accepted',
+      requestSent: result[0].status === 'pending'
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// Routes de recherche
+app.get('/api/search/users', authenticateToken, async (req, res) => {
+  const { q } = req.query;
+  const currentUserId = req.user.id;
+  
+  if (!q || q.length < 2) {
+    return res.status(400).json({ message: 'Terme de recherche trop court' });
+  }
+  
+  try {
+    const [users] = await promisePool.query(
+      `SELECT u.id, u.username, u.email, 
+        p.photo_path as avatar,
+        CASE WHEN f.status = 'accepted' THEN 1 ELSE 0 END as isFollowing,
+        CASE WHEN f.status = 'pending' AND f.follower_id = ? THEN 1 ELSE 0 END as requestSent
+       FROM users u
+       LEFT JOIN profile_photo p ON u.id = p.user_id
+       LEFT JOIN followers f ON (f.follower_id = ? AND f.followed_id = u.id) 
+                            OR (f.followed_id = ? AND f.follower_id = u.id)
+       WHERE u.username LIKE ? AND u.id != ?
+       GROUP BY u.id
+       ORDER BY u.username
+       LIMIT 20`,
+      [currentUserId, currentUserId, currentUserId, `%${q}%`, currentUserId]
+    );
+    
+    res.json(users);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+  // Récupérer le nombre de notifications non lues
+app.get('/api/notifications/unread/count', authenticateToken, async (req, res) => {
+  const userId = req.user.id;
+  
+  try {
+    const [result] = await promisePool.query(
+      'SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND is_read = 0',
+      [userId]
+    );
+    
+    res.json({ count: result[0].count });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
 
 // Démarrer le serveur
 server.listen(PORT, () => {

@@ -33,8 +33,11 @@ export default function NotificationsPage() {
     }
   }
 
+  // Dans notifications/page.js, modifiez getNotificationMessage :
   const getNotificationMessage = (notification) => {
     switch (notification.type) {
+      case 'friend_request':
+        return `vous a envoyé une demande d'ami`
       case 'follow':
         return `vous a suivi(e)`
       case 'reaction':
@@ -75,7 +78,7 @@ export default function NotificationsPage() {
           <div className="divide-y divide-gray-100">
             {notifications.map((notif) => (
               <div key={notif.id} className="flex items-start gap-3 px-5 py-4 hover:bg-gray-50/50 transition-colors duration-150">
-                <Link href={`/home/followedPage/${notif.actor_id}`} className="flex-shrink-0">
+                <Link href={`/home/followedPage/${notif.actor_id}`} className="shrink-0">
                   <Avatar userId={notif.actor_id} size="sm" />
                 </Link>
                 <div className="flex-1 min-w-0">
@@ -95,7 +98,7 @@ export default function NotificationsPage() {
                   </p>
                 </div>
                 {!notif.is_read && (
-                  <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 mt-2"></div>
+                  <div className="w-2 h-2 bg-blue-500 rounded-full shrink-0 mt-2"></div>
                 )}
               </div>
             ))}

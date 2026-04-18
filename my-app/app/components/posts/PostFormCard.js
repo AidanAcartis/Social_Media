@@ -40,11 +40,11 @@ export default function PostFormCard({ onPostCreated }) {
 
     try {
       // Dans handleSubmit, assure-toi que l'URL est correcte
-      const response = await fetch('http://localhost:5000/api/posts', {
-        method: 'POST',
-        credentials: 'include',
-        body: formData
-      })
+        const response = await fetch('http://localhost:5000/api/posts', {
+          method: 'POST',
+          credentials: 'include',
+          body: formData
+        })
 
       if (response.ok) {
         const newPost = await response.json()

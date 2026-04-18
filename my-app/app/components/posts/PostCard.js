@@ -13,6 +13,8 @@ export default function PostCard({ post, onDelete, onReaction }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [showReactions, setShowReactions] = useState(false)
   const [userReaction, setUserReaction] = useState(post.userReaction)
+  const [imageLoaded, setImageLoaded] = useState(false)
+  const [imageError, setImageError] = useState(false)
   
   const reactionEmojis = {
     like: '👍',
@@ -99,16 +101,51 @@ export default function PostCard({ post, onDelete, onReaction }) {
         )}
       </div>
       
-      {/* Contenu du post - Photo de couverture agrandie */}
+      {/* Contenu du post */}
       <div className="px-5 pb-3">
         <p className="text-gray-800 whitespace-pre-wrap leading-relaxed">{post.content}</p>
-        {post.image && (
-          <div className="mt-4 rounded-xl overflow-hidden bg-gray-100">
+        
+        {/* Conteneur d'image responsive */}
+        {post.image && !imageError && (
+          <div className="mt-4 relative">
+            {/* Skeleton loader pendant le chargement */}
+            {!imageLoaded && (
+              <div className="w-full bg-gray-200 rounded-xl animate-pulse" style={{ aspectRatio: '16/9' }}>
+                <div className="w-full h-full flex items-center justify-center">
+                  <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                </div>
+              </div>
+            )}
+            
+            {/* Image avec ratio d'aspect maintenu */}
             <img 
-              src={post.image} 
-              alt="Post image" 
-              className="w-full object-cover max-h-[125] hover:scale-105 transition-transform duration-500" 
+              src={`http://localhost:5000${post.image}`}
+              alt="Post image"
+              onLoad={() => setImageLoaded(true)}
+              onError={() => setImageError(true)}
+              className={`
+                w-full rounded-xl object-contain bg-gray-50 transition-all duration-500
+                ${imageLoaded ? 'opacity-100' : 'opacity-0 absolute inset-0'}
+              `}
+              style={{ 
+                aspectRatio: 'auto',
+                maxHeight: '600px'
+              }}
             />
+          </div>
+        )}
+        
+        {/* Message d'erreur si l'image ne charge pas */}
+        {imageError && (
+          <div className="mt-4 p-4 bg-red-50 rounded-xl border border-red-200">
+            <div className="flex items-center gap-2 text-red-600">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <span className="text-sm">L'image n'a pas pu être chargée</span>
+            </div>
           </div>
         )}
       </div>
@@ -159,6 +196,23 @@ export default function PostCard({ post, onDelete, onReaction }) {
           <span className="text-sm font-medium">{post.commentCount || 0}</span>
         </Link>
       </div>
+
+      <style jsx>{`
+        @keyframes fade-in {
+          from { opacity: 0; transform: translateY(-4px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in {
+          animation: fade-in 0.15s ease-out;
+        }
+        @keyframes slide-up {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-slide-up {
+          animation: slide-up 0.2s ease-out;
+        }
+      `}</style>
     </Card>
   )
 }

@@ -23,6 +23,9 @@ export default function ForumPage() {
     socket.on('connect', () => {
       console.log('Connecté au serveur WebSocket')
       setIsConnected(true)
+      if (user) {
+        socket.emit('join', user.id)
+      }
     })
 
     socket.on('forumMessages', (fetchedMessages) => {
@@ -43,7 +46,7 @@ export default function ForumPage() {
     return () => {
       socket.disconnect()
     }
-  }, [])
+  }, [user])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -64,8 +67,6 @@ export default function ForumPage() {
   return (
     <div className="animate-fade-in">
       <Card className="overflow-hidden border border-gray-100 shadow-sm rounded-2xl">
-
-        {/* En-tête */}
         <div className="px-5 py-4 border-b border-gray-100">
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-3">
@@ -88,8 +89,7 @@ export default function ForumPage() {
           </div>
         </div>
 
-        {/* Zone des messages */}
-        <div className="h-[125] overflow-y-auto p-5 bg-gray-50/50 flex flex-col">
+        <div className="h-[500px] overflow-y-auto p-5 bg-gray-50/50 flex flex-col">
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center flex-1 text-gray-300">
               <svg className="w-12 h-12 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -101,25 +101,30 @@ export default function ForumPage() {
           ) : (
             <div className="space-y-4">
               {messages.map((msg, index) => {
-                const isOwn = msg.senderId === user?.id
+                // Utilisez sender_id pour identifier l'expéditeur
+                const senderId = msg.sender_id || msg.user_id
+                const isOwn = senderId === user?.id
+                
                 return (
                   <div
                     key={index}
-                    className={`flex gap-2.5 items-end animate-slide-in ${isOwn ? 'flex-row-reverse' : ''}`}
+                    className={`flex gap-2.5 items-start ${isOwn ? 'flex-row-reverse' : ''}`}
                     style={{ animationDelay: `${index * 0.02}s` }}
                   >
-                    <Avatar userId={msg.senderId} size="sm" />
+                    {/* Avatar de l'expéditeur */}
+                    <Avatar userId={senderId} size="sm" />
+                    
                     <div className={`max-w-[70%] ${isOwn ? 'items-end' : 'items-start'} flex flex-col`}>
                       <div className={`flex items-baseline gap-1.5 mb-1 px-1 ${isOwn ? 'flex-row-reverse' : ''}`}>
                         <span className="text-[11px] font-medium text-gray-500">
-                          {isOwn ? 'Vous' : msg.username || `Utilisateur ${msg.senderId}`}
+                          {isOwn ? 'Vous' : msg.username || `Utilisateur ${senderId}`}
                         </span>
                         <span className="text-[10px] text-gray-300">
-                          {new Date(msg.createdAt || msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          {new Date(msg.created_at || msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </span>
                       </div>
                       <div
-                        className={`px-3.5 py-2 text-sm leading-relaxed wrap-break-words ${
+                        className={`px-3.5 py-2 text-sm leading-relaxed break-words ${
                           isOwn
                             ? 'bg-gray-900 text-white rounded-2xl rounded-br-sm'
                             : 'bg-white text-gray-800 border border-gray-100 rounded-2xl rounded-bl-sm'
@@ -136,7 +141,6 @@ export default function ForumPage() {
           )}
         </div>
 
-        {/* Formulaire d'envoi */}
         <div className="border-t border-gray-100 bg-white px-4 py-3">
           <form onSubmit={sendMessage} className="flex gap-2.5 items-center">
             <div className="flex-1 relative">

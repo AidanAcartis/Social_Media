@@ -13,7 +13,7 @@ router.post('/', authenticateToken, upload.single('image'), async (req, res) => 
   
   const userId = req.user.id;
   const content = req.body.content || '';
-  const imagePath = req.file ? `/uploads/posts/${req.file.filename}` : null;
+  const imagePath = req.file ? `http://localhost:5000/uploads/posts/${req.file.filename}` : null;
   
   try {
     const [result] = await promisePool.query(

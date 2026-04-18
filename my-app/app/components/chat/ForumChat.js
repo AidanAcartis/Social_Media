@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../../context/AuthContext'
+import Avatar from '../ui/Avatar'
 import io from 'socket.io-client'
 
 let socket = null
@@ -23,13 +24,16 @@ export default function ForumChat() {
     socket.on('connect', () => {
       console.log('Connecté au serveur WebSocket')
       setIsConnected(true)
+      socket.emit('join', user.id)
     })
 
     socket.on('forumMessages', (fetchedMessages) => {
+      console.log('Messages reçus:', fetchedMessages) // Pour déboguer
       setMessages(fetchedMessages)
     })
 
     socket.on('newForumMessage', (message) => {
+      console.log('Nouveau message:', message) // Pour déboguer
       setMessages((prev) => [...prev, message])
     })
 
@@ -68,28 +72,40 @@ export default function ForumChat() {
             Aucun message pour le moment. Soyez le premier à écrire !
           </div>
         ) : (
-          messages.map((msg, index) => (
-            <div
-              key={index}
-              className={`flex ${msg.senderId === user?.id ? 'justify-end' : 'justify-start'}`}
-            >
+          messages.map((msg, index) => {
+            // Utilisez sender_id ou user_id pour identifier l'expéditeur
+            const senderId = msg.sender_id || msg.user_id
+            const isOwn = senderId === user?.id
+            
+            return (
               <div
-                className={`max-w-[70%] rounded-lg p-3 ${
-                  msg.senderId === user?.id
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-white border shadow-sm'
-                }`}
+                key={index}
+                className={`flex gap-2 ${isOwn ? 'justify-end' : 'justify-start'}`}
               >
-                <p className={`text-sm font-semibold ${msg.senderId === user?.id ? 'text-blue-100' : 'text-gray-600'}`}>
-                  {msg.senderId === user?.id ? 'Moi' : msg.username || `Utilisateur ${msg.senderId}`}
-                </p>
-                <p className="break-words">{msg.content}</p>
-                <p className={`text-xs mt-1 ${msg.senderId === user?.id ? 'text-blue-200' : 'text-gray-400'}`}>
-                  {new Date(msg.createdAt || msg.timestamp).toLocaleTimeString()}
-                </p>
+                {/* Avatar de l'expéditeur (pas celui de l'utilisateur courant) */}
+                {!isOwn && <Avatar userId={senderId} size="sm" />}
+                
+                <div
+                  className={`max-w-[70%] rounded-lg p-3 ${
+                    isOwn
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-white border shadow-sm'
+                  }`}
+                >
+                  <p className={`text-sm font-semibold ${isOwn ? 'text-blue-100' : 'text-gray-600'}`}>
+                    {isOwn ? 'Moi' : msg.username || `Utilisateur ${senderId}`}
+                  </p>
+                  <p className="break-words">{msg.content}</p>
+                  <p className={`text-xs mt-1 ${isOwn ? 'text-blue-200' : 'text-gray-400'}`}>
+                    {new Date(msg.created_at).toLocaleTimeString()}
+                  </p>
+                </div>
+                
+                {/* Avatar de l'utilisateur courant pour ses propres messages */}
+                {isOwn && <Avatar userId={user.id} size="sm" />}
               </div>
-            </div>
-          ))
+            )
+          })
         )}
         <div ref={messagesEndRef} />
       </div>

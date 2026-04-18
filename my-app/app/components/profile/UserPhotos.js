@@ -9,6 +9,7 @@ export default function UserPhotos({ userId }) {
   const [videos, setVideos] = useState([])
   const [pdfs, setPdfs] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [activeTab, setActiveTab] = useState('photos')
 
   const isOwnProfile = user?.id === userId
@@ -20,21 +21,57 @@ export default function UserPhotos({ userId }) {
   }, [userId])
 
   const fetchUserFiles = async () => {
+    setLoading(true)
+    setError(null)
+    
     try {
       const response = await fetch(`http://localhost:5000/api/users/${userId}/files`, {
         credentials: 'include'
       })
-      if (response.ok) {
-        const data = await response.json()
-        setPhotos(data.filter(f => f.doc_type === 'photo'))
-        setVideos(data.filter(f => f.doc_type === 'video'))
-        setPdfs(data.filter(f => f.doc_type === 'pdf'))
+      
+      if (!response.ok) {
+        throw new Error(`Erreur ${response.status}: ${response.statusText}`)
       }
+      
+      const data = await response.json()
+      console.log('Fichiers récupérés:', data) // Pour déboguer
+      
+      // CORRECTION: Détecter le type de fichier basé sur l'extension
+      const processedFiles = data.map(file => ({
+        ...file,
+        doc_type: file.doc_type || detectFileTypeFromUrl(file.doc_url)
+      }))
+      
+      setPhotos(processedFiles.filter(f => f.doc_type === 'photo'))
+      setVideos(processedFiles.filter(f => f.doc_type === 'video'))
+      setPdfs(processedFiles.filter(f => f.doc_type === 'pdf'))
     } catch (error) {
       console.error('Error fetching user files:', error)
+      setError(error.message)
     } finally {
       setLoading(false)
     }
+  }
+
+  // Fonction pour détecter le type de fichier depuis l'URL
+  const detectFileTypeFromUrl = (url) => {
+    if (!url) return null
+    
+    const extension = url.split('.').pop().toLowerCase()
+    
+    const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg']
+    const videoExtensions = ['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv']
+    const documentExtensions = ['pdf', 'doc', 'docx', 'txt', 'xls', 'xlsx', 'ppt', 'pptx']
+    
+    if (imageExtensions.includes(extension)) {
+      return 'photo'
+    } else if (videoExtensions.includes(extension)) {
+      return 'video'
+    } else if (documentExtensions.includes(extension)) {
+      return 'pdf'
+    }
+    
+    return 'other'
   }
 
   const tabs = [
@@ -44,11 +81,31 @@ export default function UserPhotos({ userId }) {
   ]
 
   const extractFileName = (url) => {
+    if (!url) return 'Fichier'
     return url.split('/').pop()
   }
 
   if (loading) {
-    return <div className="text-center py-8 text-gray-500">Chargement des fichiers...</div>
+    return (
+      <div className="text-center py-8">
+        <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+        <p className="mt-2 text-gray-500">Chargement des fichiers...</p>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="text-center py-8 text-red-500">
+        <p>Erreur: {error}</p>
+        <button 
+          onClick={fetchUserFiles}
+          className="mt-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+        >
+          Réessayer
+        </button>
+      </div>
+    )
   }
 
   const hasNoFiles = photos.length === 0 && videos.length === 0 && pdfs.length === 0
@@ -66,7 +123,7 @@ export default function UserPhotos({ userId }) {
   return (
     <div>
       {/* Onglets */}
-      <div className="flex border-b mb-4">
+      <div className="flex border-b mb-4 gap-2">
         {tabs.map(tab => (
           <button
             key={tab.id}
@@ -93,12 +150,20 @@ export default function UserPhotos({ userId }) {
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           {photos.length > 0 ? (
             photos.map((photo, index) => (
-              <div key={index} className="relative group">
+              <div 
+                key={photo.id || index} 
+                className="relative group cursor-pointer" 
+                onClick={() => window.open(`http://localhost:5000${photo.doc_url}`, '_blank')}
+              >
                 <img
-                  src={photo.doc_url}
+                  src={`http://localhost:5000${photo.doc_url}`}
                   alt={`Photo ${index + 1}`}
-                  className="w-full h-40 object-cover rounded-lg cursor-pointer hover:opacity-90 transition"
-                  onClick={() => window.open(photo.doc_url, '_blank')}
+                  className="w-full h-40 object-cover rounded-lg hover:opacity-90 transition"
+                  onError={(e) => {
+                    console.error('Erreur chargement image:', `http://localhost:5000${photo.doc_url}`)
+                    e.target.src = '/placeholder-image.jpg'
+                    e.target.onerror = null
+                  }}
                 />
                 <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition rounded-lg" />
               </div>
@@ -116,9 +181,9 @@ export default function UserPhotos({ userId }) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {videos.length > 0 ? (
             videos.map((video, index) => (
-              <div key={index} className="border rounded-lg overflow-hidden">
-                <video controls className="w-full">
-                  <source src={video.doc_url} type="video/mp4" />
+              <div key={video.id || index} className="border rounded-lg overflow-hidden">
+                <video controls className="w-full" preload="metadata">
+                  <source src={`http://localhost:5000${video.doc_url}`} type="video/mp4" />
                   Votre navigateur ne supporte pas la lecture des vidéos.
                 </video>
                 <div className="p-2 text-sm text-gray-600 truncate">
@@ -140,8 +205,8 @@ export default function UserPhotos({ userId }) {
           {pdfs.length > 0 ? (
             pdfs.map((pdf, index) => (
               <a
-                key={index}
-                href={pdf.doc_url}
+                key={pdf.id || index}
+                href={`http://localhost:5000${pdf.doc_url}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-3 p-3 border rounded-lg hover:bg-gray-50 transition"
@@ -151,7 +216,7 @@ export default function UserPhotos({ userId }) {
                 </svg>
                 <div className="flex-1">
                   <p className="font-medium text-gray-800">{extractFileName(pdf.doc_url)}</p>
-                  <p className="text-sm text-gray-500">PDF Document</p>
+                  <p className="text-sm text-gray-500">Document PDF</p>
                 </div>
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-gray-400">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
