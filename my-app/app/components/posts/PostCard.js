@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import Card from '../ui/Card'
 import Avatar from '../ui/Avatar'
@@ -9,11 +9,21 @@ import { formatDistanceToNow } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import CommentCard from '../comments/CommentCard'
 
+const reactionEmojis = {
+  like: '👍',
+  love: '❤️',
+  haha: '😂',
+  sad: '😢',
+  angry: '😡'
+}
+
 export default function PostCard({ post, onDelete, onReaction, onCommentAdded, onCommentDeleted }) {
   const { user } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
   const [showReactions, setShowReactions] = useState(false)
   const [userReaction, setUserReaction] = useState(post.userReaction)
+  const [reactionCount, setReactionCount] = useState(post.reactionCount || 0)
+  const [topReactions, setTopReactions] = useState([])
   const [imageLoaded, setImageLoaded] = useState(false)
   const [imageError, setImageError] = useState(false)
   const [showComments, setShowComments] = useState(false)
@@ -21,28 +31,65 @@ export default function PostCard({ post, onDelete, onReaction, onCommentAdded, o
   const [commentsLoading, setCommentsLoading] = useState(false)
   const [newComment, setNewComment] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  
-  const reactionEmojis = {
-    like: '👍',
-    love: '❤️',
-    haha: '😂',
-    sad: '😢',
-    angry: '😡'
+  const timeoutRef = useRef(null)
+
+  // Récupérer les top réactions
+  const fetchTopReactions = async () => {
+    try {
+      const response = await fetch(`http://localhost:5000/api/posts/${post.id}/reactions/top`, {
+        credentials: 'include'
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setTopReactions(data)
+      }
+    } catch (error) {
+      console.error('Error fetching top reactions:', error)
+    }
   }
-  
+
+  useEffect(() => {
+    fetchTopReactions()
+  }, [post.id, reactionCount])
+
+  const handleMouseEnter = () => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current)
+      timeoutRef.current = null
+    }
+    setShowReactions(true)
+  }
+
+  const handleMouseLeave = () => {
+    timeoutRef.current = setTimeout(() => {
+      setShowReactions(false)
+    }, 200)
+  }
+
   const handleReaction = async (type) => {
-    const response = await fetch(`http://localhost:5000/api/posts/${post.id}/reactions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ type })
-    })
-    
-    if (response.ok) {
-      setUserReaction(type)
-      onReaction?.(post.id, type)
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current)
     }
     setShowReactions(false)
+
+    try {
+      const response = await fetch(`http://localhost:5000/api/posts/${post.id}/reactions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ type })
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setUserReaction(type)
+        setReactionCount(data.count)
+        onReaction?.(post.id, type)
+        fetchTopReactions()
+      }
+    } catch (error) {
+      console.error('Error adding reaction:', error)
+    }
   }
   
   const handleDelete = async () => {
@@ -126,6 +173,17 @@ export default function PostCard({ post, onDelete, onReaction, onCommentAdded, o
     setShowComments(!showComments)
   }
 
+  // Déterminer l'emoji à afficher sur le bouton
+  const getDisplayEmoji = () => {
+    if (userReaction) {
+      return reactionEmojis[userReaction]
+    }
+    if (topReactions.length > 0) {
+      return reactionEmojis[topReactions[0].type]
+    }
+    return '👍'
+  }
+
   return (
     <Card className="overflow-hidden border border-gray-100 shadow-sm rounded-2xl transition-all duration-200 hover:shadow-md">
       {/* En-tête du post */}
@@ -203,28 +261,25 @@ export default function PostCard({ post, onDelete, onReaction, onCommentAdded, o
       {/* Actions du post */}
       <div className="px-4 py-2 flex items-center gap-4 border-t border-gray-100">
         {/* Bouton de réaction */}
-        <div className="relative">
-          <button
-            onMouseEnter={() => setShowReactions(true)}
-            onMouseLeave={() => setShowReactions(false)}
-            onClick={() => handleReaction('like')}
-            className="flex items-center gap-1 text-gray-400 hover:text-blue-500 transition-colors text-xs"
-          >
-            <span className="text-base">{userReaction ? reactionEmojis[userReaction] : '👍'}</span>
-            {post.reactionCount > 0 && <span className="text-xs">{post.reactionCount}</span>}
+        <div 
+          className="relative"
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+        >
+          <button className="flex items-center gap-1 text-gray-400 hover:text-blue-500 transition-colors text-xs">
+            <span className="text-base">{getDisplayEmoji()}</span>
+            {reactionCount > 0 && <span className="text-xs">{reactionCount}</span>}
           </button>
           
           {showReactions && (
-            <div 
-              onMouseEnter={() => setShowReactions(true)}
-              onMouseLeave={() => setShowReactions(false)}
-              className="absolute bottom-full left-0 mb-2 flex gap-1.5 bg-white rounded-full shadow-lg border border-gray-100 p-1.5 z-10"
-            >
+            <div className="absolute bottom-full left-0 mb-2 flex gap-1.5 bg-white rounded-full shadow-lg border border-gray-100 p-1.5 z-10">
               {Object.entries(reactionEmojis).map(([type, emoji]) => (
                 <button
                   key={type}
                   onClick={() => handleReaction(type)}
-                  className="text-xl hover:scale-110 transition-transform"
+                  className={`text-xl hover:scale-110 transition-transform ${
+                    userReaction === type ? 'bg-blue-50 rounded-full' : ''
+                  }`}
                 >
                   {emoji}
                 </button>
@@ -255,7 +310,6 @@ export default function PostCard({ post, onDelete, onReaction, onCommentAdded, o
       {/* Section commentaires */}
       {showComments && (
         <div className="border-t border-gray-100 bg-gray-50/30 px-4 py-3">
-          {/* Formulaire d'ajout */}
           <form onSubmit={handleSubmitComment} className="flex gap-2 mb-3">
             <Avatar userId={user?.id} size="sm" />
             <div className="flex-1">
@@ -276,7 +330,6 @@ export default function PostCard({ post, onDelete, onReaction, onCommentAdded, o
             </button>
           </form>
 
-          {/* Liste des commentaires */}
           {commentsLoading ? (
             <div className="flex justify-center py-3">
               <div className="animate-spin rounded-full h-4 w-4 border border-gray-300 border-t-gray-600"></div>

@@ -1777,6 +1777,28 @@ app.get('/api/comments/:commentId/reactions/top', authenticateToken, async (req,
   }
 });
 
+// Récupérer les 3 réactions les plus utilisées d'un post
+app.get('/api/posts/:postId/reactions/top', authenticateToken, async (req, res) => {
+  const { postId } = req.params;
+  
+  try {
+    const [reactions] = await promisePool.query(
+      `SELECT reaction_type as type, COUNT(*) as count 
+       FROM post_reactions 
+       WHERE post_id = ? 
+       GROUP BY reaction_type 
+       ORDER BY count DESC 
+       LIMIT 3`,
+      [postId]
+    );
+    
+    res.json(reactions);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
 // Démarrer le serveur
 server.listen(PORT, () => {
   console.log(`🚀 Serveur démarré sur http://localhost:${PORT}`);
