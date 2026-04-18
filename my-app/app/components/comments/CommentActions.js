@@ -1,58 +1,64 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
 
-export default function CommentActions({ commentId, onReaction }) {
-  const { user } = useAuth()
-  const [userReaction, setUserReaction] = useState(null)
-  const [showEmojis, setShowEmojis] = useState(false)
-  const [reactionCount, setReactionCount] = useState(0)
+const reactionEmojis = {
+  like: '👍',
+  love: '❤️',
+  haha: '😂',
+  sad: '😢',
+  angry: '😡'
+}
 
-  const reactionEmojis = {
-    like: '👍',
-    love: '❤️',
-    haha: '😂',
-    sad: '😢',
-    angry: '😡'
+export default function CommentActions({ commentId, onReaction, initialReaction, initialCount }) {
+  const { user } = useAuth()
+  const [userReaction, setUserReaction] = useState(initialReaction || null)
+  const [showEmojis, setShowEmojis] = useState(false)
+  const [reactionCount, setReactionCount] = useState(initialCount || 0)
+  const [topReactions, setTopReactions] = useState([])
+  const timeoutRef = useRef(null)
+
+  // Récupérer les réactions les plus populaires
+  const fetchTopReactions = async () => {
+    try {
+      const response = await fetch(`http://localhost:5000/api/comments/${commentId}/reactions/top`, {
+        credentials: 'include'
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setTopReactions(data)
+      }
+    } catch (error) {
+      console.error('Error fetching top reactions:', error)
+    }
   }
 
   useEffect(() => {
-    fetchUserReaction()
-    fetchReactionCount()
-  }, [commentId])
+    fetchTopReactions()
+  }, [commentId, reactionCount])
 
-  const fetchUserReaction = async () => {
-    if (!user) return
-    try {
-      const response = await fetch(`http://localhost:5000/api/comments/${commentId}/reaction`, {
-        credentials: 'include'
-      })
-      if (response.ok) {
-        const data = await response.json()
-        setUserReaction(data.reaction)
-      }
-    } catch (error) {
-      console.error('Error fetching user reaction:', error)
+  const handleMouseEnter = () => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current)
+      timeoutRef.current = null
     }
+    setShowEmojis(true)
   }
 
-  const fetchReactionCount = async () => {
-    try {
-      const response = await fetch(`http://localhost:5000/api/comments/${commentId}/reactions/count`, {
-        credentials: 'include'
-      })
-      if (response.ok) {
-        const data = await response.json()
-        setReactionCount(data.count)
-      }
-    } catch (error) {
-      console.error('Error fetching reaction count:', error)
-    }
+  const handleMouseLeave = () => {
+    timeoutRef.current = setTimeout(() => {
+      setShowEmojis(false)
+    }, 200)
   }
 
   const handleReaction = async (type) => {
     if (!user) return
+
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current)
+    }
+    setShowEmojis(false)
 
     try {
       const response = await fetch(`http://localhost:5000/api/comments/${commentId}/reactions`, {
@@ -66,37 +72,51 @@ export default function CommentActions({ commentId, onReaction }) {
         const data = await response.json()
         setUserReaction(data.reaction)
         setReactionCount(data.count)
-        onReaction?.(commentId, data.reaction, data.count)
+        onReaction?.(data.reaction, data.count)
+        fetchTopReactions() // Rafraîchir les top réactions
       }
     } catch (error) {
       console.error('Error adding reaction:', error)
     }
-    setShowEmojis(false)
+  }
+
+  // Obtenir l'emoji à afficher sur le bouton
+  const getDisplayEmoji = () => {
+    if (userReaction) {
+      return reactionEmojis[userReaction]
+    }
+    if (topReactions.length > 0) {
+      return reactionEmojis[topReactions[0].type]
+    }
+    return '👍'
   }
 
   return (
-    <div className="relative">
+    <div 
+      className="relative inline-block"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
       <button
-        onMouseEnter={() => setShowEmojis(true)}
-        onMouseLeave={() => setShowEmojis(false)}
-        onClick={() => handleReaction('like')}
-        className="flex items-center gap-1 text-gray-500 hover:text-blue-500 text-sm"
+        className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-blue-500 transition-colors"
       >
-        <span className="text-base">{userReaction ? reactionEmojis[userReaction] : '👍'}</span>
+        <span className="text-sm">{getDisplayEmoji()}</span>
         {reactionCount > 0 && <span>{reactionCount}</span>}
       </button>
 
       {showEmojis && (
-        <div
-          onMouseEnter={() => setShowEmojis(true)}
-          onMouseLeave={() => setShowEmojis(false)}
-          className="absolute bottom-full left-0 mb-1 flex gap-1 bg-white rounded-full shadow-lg p-2 z-10"
-        >
-          <button onClick={() => handleReaction('like')} className="text-xl hover:scale-125 transition">👍</button>
-          <button onClick={() => handleReaction('love')} className="text-xl hover:scale-125 transition">❤️</button>
-          <button onClick={() => handleReaction('haha')} className="text-xl hover:scale-125 transition">😂</button>
-          <button onClick={() => handleReaction('sad')} className="text-xl hover:scale-125 transition">😢</button>
-          <button onClick={() => handleReaction('angry')} className="text-xl hover:scale-125 transition">😡</button>
+        <div className="absolute bottom-full left-0 mb-2 flex gap-1.5 bg-white rounded-full shadow-lg border border-gray-100 p-1.5 z-10 whitespace-nowrap">
+          {Object.entries(reactionEmojis).map(([type, emoji]) => (
+            <button
+              key={type}
+              onClick={() => handleReaction(type)}
+              className={`text-lg hover:scale-110 transition-transform px-0.5 ${
+                userReaction === type ? 'bg-blue-50 rounded-full' : ''
+              }`}
+            >
+              {emoji}
+            </button>
+          ))}
         </div>
       )}
     </div>

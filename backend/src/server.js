@@ -1259,7 +1259,6 @@ app.post('/api/friends/accept', authenticateToken, async (req, res) => {
   }
 });
 
-
 // Ajouter une réaction à un post
 app.post('/api/posts/:postId/reactions', authenticateToken, async (req, res) => {
   const { postId } = req.params;
@@ -1570,6 +1569,213 @@ app.post('/api/test/notification', authenticateToken, async (req, res) => {
   }
 });
 
+// ========== ROUTES COMMENTAIRES ==========
+
+// Récupérer les commentaires d'un post
+app.get('/api/comments/post/:postId', authenticateToken, async (req, res) => {
+  const { postId } = req.params;
+  
+  try {
+    const [comments] = await promisePool.query(
+      `SELECT c.*, u.username 
+       FROM comments c 
+       JOIN users u ON c.user_id = u.id 
+       WHERE c.post_id = ? 
+       ORDER BY c.created_at DESC`,
+      [postId]
+    );
+    
+    res.json(comments);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+// Ajouter un commentaire
+app.post('/api/posts/:postId/comments', authenticateToken, async (req, res) => {
+  const { postId } = req.params;
+  const { content } = req.body;
+  const userId = req.user.id;
+  
+  if (!content || !content.trim()) {
+    return res.status(400).json({ message: 'Le commentaire ne peut pas être vide' });
+  }
+  
+  try {
+    const [result] = await promisePool.query(
+      'INSERT INTO comments (post_id, user_id, content) VALUES (?, ?, ?)',
+      [postId, userId, content.trim()]
+    );
+    
+    const [post] = await promisePool.query(
+      'SELECT user_id FROM posts WHERE id = ?',
+      [postId]
+    );
+    
+    if (post.length > 0 && post[0].user_id !== userId) {
+      await promisePool.query(
+        'INSERT INTO notifications (user_id, actor_id, type, post_id, is_read) VALUES (?, ?, "comment", ?, 0)',
+        [post[0].user_id, userId, postId]
+      );
+    }
+    
+    const [newComment] = await promisePool.query(
+      `SELECT c.*, u.username 
+       FROM comments c 
+       JOIN users u ON c.user_id = u.id 
+       WHERE c.id = ?`,
+      [result.insertId]
+    );
+    
+    res.status(201).json(newComment[0]);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+// Supprimer un commentaire
+app.delete('/api/comments/:commentId', authenticateToken, async (req, res) => {
+  const { commentId } = req.params;
+  const userId = req.user.id;
+  
+  try {
+    const [comment] = await promisePool.query(
+      'SELECT user_id FROM comments WHERE id = ?',
+      [commentId]
+    );
+    
+    if (comment.length === 0) {
+      return res.status(404).json({ message: 'Commentaire non trouvé' });
+    }
+    
+    if (comment[0].user_id !== userId) {
+      return res.status(403).json({ message: 'Non autorisé' });
+    }
+    
+    await promisePool.query('DELETE FROM comments WHERE id = ?', [commentId]);
+    
+    res.json({ message: 'Commentaire supprimé avec succès' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+// Ajouter une réaction à un commentaire
+app.post('/api/comments/:commentId/reactions', authenticateToken, async (req, res) => {
+  const { commentId } = req.params;
+  const { type } = req.body;
+  const userId = req.user.id;
+  
+  if (!type) {
+    return res.status(400).json({ message: 'Type de réaction requis' });
+  }
+  
+  try {
+    const [existing] = await promisePool.query(
+      'SELECT * FROM comment_reactions WHERE comment_id = ? AND user_id = ?',
+      [commentId, userId]
+    );
+    
+    if (existing.length > 0) {
+      await promisePool.query(
+        'UPDATE comment_reactions SET reaction_type = ? WHERE comment_id = ? AND user_id = ?',
+        [type, commentId, userId]
+      );
+    } else {
+      await promisePool.query(
+        'INSERT INTO comment_reactions (comment_id, user_id, reaction_type) VALUES (?, ?, ?)',
+        [commentId, userId, type]
+      );
+      
+      const [comment] = await promisePool.query(
+        'SELECT c.user_id FROM comments c WHERE c.id = ?',
+        [commentId]
+      );
+      
+      if (comment.length > 0 && comment[0].user_id !== userId) {
+        await promisePool.query(
+          'INSERT INTO notifications (user_id, actor_id, type, post_id, is_read) VALUES (?, ?, "comment_reaction", (SELECT post_id FROM comments WHERE id = ?), 0)',
+          [comment[0].user_id, userId, commentId]
+        );
+      }
+    }
+    
+    const [countResult] = await promisePool.query(
+      'SELECT COUNT(*) as count FROM comment_reactions WHERE comment_id = ?',
+      [commentId]
+    );
+    
+    res.json({ 
+      message: 'Réaction ajoutée avec succès',
+      reaction: type,
+      count: countResult[0].count
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+// ========== ROUTE POUR RÉCUPÉRER UN POST SPÉCIFIQUE ==========
+app.get('/api/posts/:postId', authenticateToken, async (req, res) => {
+  const { postId } = req.params;
+  
+  try {
+    const [posts] = await promisePool.query(
+      `SELECT p.*, u.id as user_id, u.username 
+       FROM posts p
+       JOIN users u ON p.user_id = u.id
+       WHERE p.id = ?`,
+      [postId]
+    );
+    
+    if (posts.length === 0) {
+      return res.status(404).json({ message: 'Post non trouvé' });
+    }
+    
+    const post = {
+      id: posts[0].id,
+      content: posts[0].content,
+      image: posts[0].image,
+      created_at: posts[0].created_at,
+      user: {
+        id: posts[0].user_id,
+        username: posts[0].username
+      }
+    };
+    
+    res.json(post);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+
+// Récupérer les 3 réactions les plus utilisées d'un commentaire
+app.get('/api/comments/:commentId/reactions/top', authenticateToken, async (req, res) => {
+  const { commentId } = req.params;
+  
+  try {
+    const [reactions] = await promisePool.query(
+      `SELECT reaction_type as type, COUNT(*) as count 
+       FROM comment_reactions 
+       WHERE comment_id = ? 
+       GROUP BY reaction_type 
+       ORDER BY count DESC 
+       LIMIT 3`,
+      [commentId]
+    );
+    
+    res.json(reactions);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
 
 // Démarrer le serveur
 server.listen(PORT, () => {
