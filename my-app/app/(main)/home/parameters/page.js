@@ -5,8 +5,70 @@ import { useAuth } from '../../../context/AuthContext'
 import Card from '../../../components/ui/Card'
 
 export default function ParametersPage() {
-  const { user } = useAuth()
+  const { user, updateUser, deleteAccount } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [username, setUsername] = useState(user?.username || '')
+  const [email, setEmail] = useState(user?.email || '')
+  const [message, setMessage] = useState({ type: '', text: '' })
+
+  const handleUpdateProfile = async (e) => {
+    e.preventDefault()
+    setIsLoading(true)
+    setMessage({ type: '', text: '' })
+
+    try {
+      const response = await fetch('http://localhost:5000/api/users/update', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ username, email })
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        await updateUser({ username, email })
+        setMessage({ type: 'success', text: 'Profil mis à jour avec succès !' })
+        setTimeout(() => setMessage({ type: '', text: '' }), 3000)
+      } else {
+        const error = await response.json()
+        setMessage({ type: 'error', text: error.message || 'Erreur lors de la mise à jour' })
+      }
+    } catch (error) {
+      console.error('Error updating profile:', error)
+      setMessage({ type: 'error', text: 'Erreur de connexion' })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleDeleteAccount = async () => {
+    const confirmDelete = confirm(
+      '⚠️ ATTENTION : Cette action est irréversible. Toutes vos données (posts, commentaires, messages, etc.) seront définitivement supprimées. Voulez-vous vraiment continuer ?'
+    )
+    
+    if (!confirmDelete) return
+
+    setIsDeleting(true)
+    try {
+      const response = await fetch('http://localhost:5000/api/users/delete', {
+        method: 'DELETE',
+        credentials: 'include'
+      })
+
+      if (response.ok) {
+        await deleteAccount()
+      } else {
+        const error = await response.json()
+        alert(error.message || 'Erreur lors de la suppression')
+      }
+    } catch (error) {
+      console.error('Error deleting account:', error)
+      alert('Erreur de connexion')
+    } finally {
+      setIsDeleting(false)
+    }
+  }
 
   return (
     <div className="animate-fade-in space-y-5">
@@ -23,6 +85,15 @@ export default function ParametersPage() {
         </div>
       </div>
 
+      {/* Message de confirmation */}
+      {message.text && (
+        <div className={`p-3 rounded-xl text-sm ${
+          message.type === 'success' ? 'bg-green-50 text-green-600 border border-green-200' : 'bg-red-50 text-red-600 border border-red-200'
+        }`}>
+          {message.text}
+        </div>
+      )}
+
       {/* Carte Profil */}
       <Card className="overflow-hidden border border-gray-100 shadow-sm rounded-2xl">
         <div className="px-5 py-4 border-b border-gray-100">
@@ -38,16 +109,17 @@ export default function ParametersPage() {
             </div>
           </div>
         </div>
-        <div className="p-5 space-y-4">
+        <form onSubmit={handleUpdateProfile} className="p-5 space-y-4">
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1.5">
               Nom d'utilisateur
             </label>
             <input
               type="text"
-              value={user?.username || ''}
-              className="w-full px-4 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-gray-300 focus:border-gray-300 transition-all duration-150 disabled:opacity-60 text-gray-600"
-              disabled
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="w-full px-4 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-gray-300 focus:border-gray-300 transition-all duration-150"
+              required
             />
           </div>
           <div>
@@ -56,12 +128,32 @@ export default function ParametersPage() {
             </label>
             <input
               type="email"
-              value={user?.email || ''}
-              className="w-full px-4 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-gray-300 focus:border-gray-300 transition-all duration-150 disabled:opacity-60 text-gray-600"
-              disabled
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full px-4 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-gray-300 focus:border-gray-300 transition-all duration-150"
+              required
             />
           </div>
-        </div>
+          <div className="flex justify-end pt-2">
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="px-5 py-2 bg-gray-900 text-white text-sm font-medium rounded-full hover:bg-gray-700 disabled:opacity-50 transition-all duration-150 flex items-center gap-2"
+            >
+              {isLoading ? (
+                <>
+                  <svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Enregistrement...
+                </>
+              ) : (
+                'Enregistrer'
+              )}
+            </button>
+          </div>
+        </form>
       </Card>
 
       {/* Zone dangereuse */}
@@ -81,16 +173,29 @@ export default function ParametersPage() {
         </div>
         <div className="p-5">
           <button
-            className="px-4 py-2 bg-red-500 text-white text-sm font-medium rounded-xl hover:bg-red-600 transition-all duration-150 flex items-center gap-2 shadow-sm"
-            onClick={() => alert('Fonctionnalité à venir')}
+            onClick={handleDeleteAccount}
+            disabled={isDeleting}
+            className="px-5 py-2 bg-red-500 text-white text-sm font-medium rounded-xl hover:bg-red-600 transition-all duration-150 flex items-center gap-2 shadow-sm disabled:opacity-50"
           >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-            Supprimer mon compte
+            {isDeleting ? (
+              <>
+                <svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Suppression...
+              </>
+            ) : (
+              <>
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                Supprimer mon compte
+              </>
+            )}
           </button>
           <p className="text-[11px] text-gray-400 mt-3">
-            Cette action est irréversible. Toutes vos données seront supprimées.
+            Cette action est irréversible. Toutes vos données (posts, commentaires, messages, photos) seront définitivement supprimées.
           </p>
         </div>
       </Card>

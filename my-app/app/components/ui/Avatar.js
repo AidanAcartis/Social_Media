@@ -96,7 +96,7 @@ export default function Avatar({ userId, size = 'md', editable = false, onUpdate
           className="w-full h-full object-cover"
         />
       ) : (
-        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-400 to-purple-500 text-white text-2xl font-semibold">
+        <div className="w-full h-full flex items-center justify-center bg-linear-to-br from-blue-400 to-purple-500 text-white text-2xl font-semibold">
           {targetUserId ? String(targetUserId).slice(-2) : '?'}
         </div>
       )}

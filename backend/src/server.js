@@ -1830,6 +1830,114 @@ app.get('/api/friends/count', authenticateToken, async (req, res) => {
   }
 });
 
+// ========== ROUTES UTILISATEUR (UPDATE & DELETE) ==========
+
+// Mettre à jour le profil utilisateur
+app.put('/api/users/update', authenticateToken, async (req, res) => {
+  const { username, email } = req.body;
+  const userId = req.user.id;
+
+  if (!username || !email) {
+    return res.status(400).json({ message: 'Tous les champs sont requis' });
+  }
+
+  try {
+    // Vérifier si le nouvel email ou username existe déjà
+    const [existing] = await promisePool.query(
+      'SELECT id FROM users WHERE (email = ? OR username = ?) AND id != ?',
+      [email, username, userId]
+    );
+
+    if (existing.length > 0) {
+      return res.status(400).json({ message: 'Email ou nom d\'utilisateur déjà utilisé' });
+    }
+
+    await promisePool.query(
+      'UPDATE users SET username = ?, email = ? WHERE id = ?',
+      [username, email, userId]
+    );
+
+    // Générer un nouveau token avec les nouvelles infos
+    const token = jwt.sign(
+      { id: userId, username: username },
+      process.env.JWT_SECRET || 'mon_secret_jwt',
+      { expiresIn: '7d' }
+    );
+
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: false,
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000
+    });
+
+    res.json({ message: 'Profil mis à jour', user: { id: userId, username, email } });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+// Supprimer le compte utilisateur et toutes ses données
+app.delete('/api/users/delete', authenticateToken, async (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    // Supprimer les photos de l'utilisateur
+    const [profilePhotos] = await promisePool.query(
+      'SELECT photo_path FROM profile_photo WHERE user_id = ?',
+      [userId]
+    );
+    const [coverPhotos] = await promisePool.query(
+      'SELECT photo_path FROM cover_photo WHERE user_id = ?',
+      [userId]
+    );
+    const [postImages] = await promisePool.query(
+      'SELECT image FROM posts WHERE user_id = ? AND image IS NOT NULL',
+      [userId]
+    );
+
+    // Supprimer les fichiers physiques
+    const deleteFiles = (photos) => {
+      photos.forEach(photo => {
+        if (photo.photo_path || photo.image) {
+          const filePath = path.join(__dirname, '../', photo.photo_path || photo.image);
+          if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+          }
+        }
+      });
+    };
+
+    deleteFiles(profilePhotos);
+    deleteFiles(coverPhotos);
+    deleteFiles(postImages);
+
+    // Supprimer toutes les données de l'utilisateur dans l'ordre (respect des clés étrangères)
+    await promisePool.query('DELETE FROM comment_reactions WHERE comment_id IN (SELECT id FROM comments WHERE user_id = ?)', [userId]);
+    await promisePool.query('DELETE FROM comments WHERE user_id = ?', [userId]);
+    await promisePool.query('DELETE FROM post_reactions WHERE user_id = ?', [userId]);
+    await promisePool.query('DELETE FROM private_messages WHERE sender_id = ? OR receiver_id = ?', [userId, userId]);
+    await promisePool.query('DELETE FROM forum_messages WHERE sender_id = ?', [userId]);
+    await promisePool.query('DELETE FROM notifications WHERE user_id = ? OR actor_id = ?', [userId, userId]);
+    await promisePool.query('DELETE FROM followers WHERE follower_id = ? OR followed_id = ?', [userId, userId]);
+    await promisePool.query('DELETE FROM about WHERE user_id = ?', [userId]);
+    await promisePool.query('DELETE FROM location WHERE user_id = ?', [userId]);
+    await promisePool.query('DELETE FROM profile_photo WHERE user_id = ?', [userId]);
+    await promisePool.query('DELETE FROM cover_photo WHERE user_id = ?', [userId]);
+    await promisePool.query('DELETE FROM posts WHERE user_id = ?', [userId]);
+    await promisePool.query('DELETE FROM users WHERE id = ?', [userId]);
+
+    // Supprimer le cookie
+    res.clearCookie('token');
+    
+    res.json({ message: 'Compte supprimé avec succès' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
 // Démarrer le serveur
 server.listen(PORT, () => {
   console.log(`🚀 Serveur démarré sur http://localhost:${PORT}`);
